@@ -2,3 +2,8 @@ name = "StratLearn"
 uuid = "1dba0b91-30c4-4076-814e-79f854315aac"
 authors = ["chiara.moretti1989@gmail.com <chiara.moretti1989@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+XGBoost = "009559a3-9522-5dbb-924b-0b6ed2b22bb9"
