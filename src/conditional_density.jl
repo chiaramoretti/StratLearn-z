@@ -107,7 +107,7 @@ function condDensityStatio(distancesX, z;
     Y = kernelMatrixN * Z
     Q = qr(Y).Q
     B = transpose(Q) * Z * inv(transpose(Q) * Omega)
-    eigenB = eigen(B, sortby = x -> -x)
+    eigenB = eigen(B, sortby = x -> (-real(x), -imag(x)))
     lambda = eigenB.values
     U = Q * eigenB.vectors
     basisX = real(sqrt(n) * U[:, 1:nXMax])
