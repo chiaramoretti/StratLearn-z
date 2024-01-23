@@ -736,3 +736,34 @@ function comb_test_loss_fct(predictedComplete, zTestU, zMin, zMax, nBins; boot=0
 
     return output
 end
+
+
+function estimate_combined_stratified_risk_Statio(predictedComplete, predictedObserved,
+                                                  zTest_ordered, nBins, boot=false,
+                                                  zMin=0, zMax=1)
+
+    zGrid = range(zMin, zMax, length = nBins)
+
+    colmeansComplete = mean.(eachcol(predictedComplete .^ 2))
+    sSquare = mean(colmeansComplete)
+    likeli = mean(predictedObserved)
+    output = Dict("mean" => 0.5 * sSquare - likeli)
+
+    if boot
+        # Bootstrap
+        bootMeans = [begin
+                     sampleBoot = sample(1:length(zTest_ordered),
+                                       length(zTest_ordered), replace=true)
+                     predictedCompleteBoot = predictedComplete[sampleBoot, :]
+                     colmeansCompleteBoot = mean.(eachcol(predictedCompleteBoot .^ 2))
+                     sSquareBoot = mean(colmeansCompleteBoot)
+                     predictedObservedBoot = [predictedCompleteBoot[i, argmin(
+                         abs.(zTest_ordered[sampleBoot[i]] .- zGrid))]
+                                              for i in 1:length(zTest_ordered)]
+                     likeliBoot = mean(predictedObservedBoot)
+                     0.5 *sSquareBoot - likeliBoot
+                     end for _ in 1:100] # Assuming 100 bootstrap samples
+        output["seBoot"] = sqrt(var(bootMeans))
+    end
+    return output
+end
