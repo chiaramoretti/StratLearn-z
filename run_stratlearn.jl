@@ -15,10 +15,9 @@ using PrettyTables
 using Serialization
 
 # Include external functions defined in other files:
-include("../src/balance_check.jl")
-include("../src/conditional_density.jl")
-include("../src/conditional_density_CS.jl")
-# include("estimate_weights.jl")
+include("./src/balance_check.jl")
+include("./src/conditional_density.jl")
+include("./src/conditional_density_CS.jl")
 
 # Set working directory (if needed)
 # cd("./") # Uncomment and set the path if you need to change the working directory
@@ -30,8 +29,8 @@ function main()
 
     # Load data: first nr_covariates columns are the covariates (r-band + colors),
     # last columns is spectroscopic redshift
-    data_spectro_raw = CSV.read("../data/train.csv", DataFrame)
-    data_photo_raw = CSV.read("../data/test.csv", DataFrame)
+    data_spectro_raw = CSV.read("./data/train.csv", DataFrame)
+    data_photo_raw = CSV.read("./data/test.csv", DataFrame)
 
     # Script parameters
     nL = size(data_spectro_raw, 1) # nr of source samples used
@@ -473,6 +472,7 @@ for stratum in first_test_group:nr_groups
         nZBest_I = sta_objectStationaryAdaptive_delta["nZBest"]
         optimal_hyperparams[stratum, "nXBest_J"] = nXBest_J
         optimal_hyperparams[stratum, "nZbest_I"] = nZBest_I
+
         sta_validationL_stratified_predictions_Adaptive =
             estimate_stratifiedpredictions_Statio(sta_objectStationaryAdaptive_delta,
                                                   sta_zValidationL,
@@ -543,7 +543,8 @@ predict_complete_U = predictDensityStatio(sta_objectStationaryAdaptive,
                                           probabilityInterval=false,
                                           delta=delta_best)
 
-## compute the stratified predictions to merge them together later, to get the combined loss 
+## compute the stratified predictions to merge them together later
+# to get the combined loss 
 sta_stratified_predictions =
     estimate_stratifiedpredictions_Statio(sta_objectStationaryAdaptive,
                                           sta_zU,
@@ -558,7 +559,8 @@ sta_stratified_predictions =
 push!(sta_predictedComplete, predict_complete_U)
 push!(sta_predictedObserved, sta_stratified_predictions["predictedObserved"])
 
-# concatenate the true redshift in the order of the StratLearn predictions for the test sets of each strata
+# concatenate the true redshift in the order of the StratLearn predictions
+# for the test sets of each strata
 sta_ordered_zU = [sta_ordered_zU; sta_zU]
 sta_ordered_zTestU = [sta_ordered_zTestU; sta_zTestU]
 sta_ordered_uniqueID_photo = [sta_ordered_uniqueID_photo; sta_uniqueID_photo]
@@ -578,6 +580,11 @@ if hyperparam_selection == "grid_search"
 end
 end
 
+sta_predictedComplete = vcat(sta_predictedComplete...)
+sta_predictedObserved = vcat(sta_predictedObserved...)
+
+print(optimal_hyperparams)
+
 # Save hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
     new_hyperparams_path_name =
@@ -588,16 +595,17 @@ end
 
 # Calculate combined loss if grid search was performed
 if hyperparam_selection == "grid_search"
-    sta_finallossAdaptive[nr_groups + 1] =
-        estimate_combined_stratified_risk_Statio(
-            sta_predictedComplete,
-            sta_predictedObserved,
-            nr_fzxbins,
-            sta_ordered_zU,
-            boot=400,
-            zMin=0, zMax=1)
+    push!(sta_finallossAdaptive,
+          estimate_combined_stratified_risk_Statio(
+              sta_predictedComplete,
+              sta_predictedObserved,
+              sta_ordered_zU,
+              0, 1,
+              nr_fzxbins,
+              boot=400))
 end
 
+println("Series cond. density estimator done, starting KNN\n")
 
 #-------------------------------- KNN ------------------------------------------
 # Initialize variables for storing KNN results
@@ -609,11 +617,6 @@ sta_validationL_finallossKNN = []
 sta_validationL_predictedComplete_KNN = []
 sta_validationU_finallossKNN = []
 sta_validationU_predictedComplete_KNN = []
-
-# Placeholder for optimal hyperparameters
-optimal_hyperparams = DataFrame(epsilon = NaN, delta = NaN,nXbest_J = NaN,
-                                nZbest_I = NaN,
-                                bandwidth = NaN, nearestNeighbors = NaN, alpha = NaN)
 
 for stratum in first_test_group:nr_groups
     ### Train and validation subsets
@@ -686,6 +689,7 @@ for stratum in first_test_group:nr_groups
                         sta_zValidationL, boot=false)["mean"]
             end
         end
+
         pointMin = findmin(sta_lossKNNBinned)
         sta_bestBandwidthKNN=(bandwidthsVec)[pointMin[2][1]] # 0.0002223111
         sta_bestKNNDensity=(nNeighbours)[pointMin[2][2]] # 10
@@ -693,7 +697,7 @@ for stratum in first_test_group:nr_groups
         ## store optimal hyperparameters
         optimal_hyperparams[stratum,"bandwidth"] = sta_bestBandwidthKNN
         optimal_hyperparams[stratum,"nearestNeighbors"] = sta_bestKNNDensity
-        
+
         ### Validation set predictions:
         ### labeled validation predictions and loss (on strata)
         sta_validationL_stratified_predictions_KNN =
@@ -754,17 +758,11 @@ for stratum in first_test_group:nr_groups
                   add_pred = false,
                   predictedComplete = sta_validationU_stratified_predictions_KNN["predictedComplete"],
                   predictedObserved = sta_validationU_stratified_predictions_KNN["predictedObserved"]))
-        GC.gc() 
-        
         
     elseif hyperparam_selection == "fixed"
         sta_bestBandwidthKNN = stored_hyperparams_per_strata.bandwidth[stratum]
         sta_bestKNNDensity = stored_hyperparams_per_strata.nearestNeighbors[stratum]
     end
-
-############################################################################
-### Predict and evaluate optimized KNN fzx
-
 # Normalized KNN complete (unlabelled test set predictions) test set
 predict_complete_KNN_U = predictDensityKNN(sta_distanceXU_L,
                                            sta_zL,
@@ -809,6 +807,9 @@ if hyperparam_selection == "grid_search"
 end
 end
 
+sta_predictedComplete_KNN = vcat(sta_predictedComplete_KNN...)
+sta_predictedObserved_KNN = vcat(sta_predictedObserved_KNN...)
+
 # Save optimal hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
     new_hyperparams_path_name =
@@ -817,19 +818,16 @@ if hyperparam_selection == "grid_search"
     serialize(new_hyperparams_path_name, optimal_hyperparams)
 end
 
-
-# !!! sono arrivata qua
 # Calculate combined loss if grid search was performed
 if hyperparam_selection == "grid_search"
-    sta_finallossAdaptive[nr_groups + 1] =
-        estimate_combined_stratified_risk_Statio_KNN(
-            sta_predictedComplete_KNN[stratum],
-            sta_predictedObserved_KNN[stratum],
-            sta_ordered_zU,
-            0,
-            1,
-            nr_fzxbins,
-            boot=400)
+    push!(sta_finallossAdaptive,
+          estimate_combined_stratified_risk_Statio_KNN(
+              sta_predictedComplete_KNN,
+              sta_predictedObserved_KNN,
+              sta_ordered_zU,
+              0, 1,
+              nr_fzxbins,
+              boot=400))
 end
 
 #--------------------------------------------------------------
