@@ -203,7 +203,7 @@ function estimateErrorFinalEstimatorStatio(object, zTest, distanceXTestTrain,
                          for i in 1:length(zTest)]
                      likeliBoot = mean(predictedObservedBoot)
                      0.5 * sSquareBoot - likeliBoot
-                     end for _ in 1:boot]  # Assuming 100 bootstrap samples
+                     end for _ in 1:boot]
         output["seBoot"] = sqrt(var(bootMeans))
     end
 
@@ -651,17 +651,17 @@ predictedComplete = estimate_stratifiedpredictions_Statio_KNN(nNeigh, nBins, ban
 function estimate_stratifiedpredictions_Statio_KNN(nNeigh, nBins, bandwidthBinsOpt,
                                                    zMin, zMax, zTrain,
                                                    distanceXTestTrainL, zTest;
-                                                   predictedComplete=nothing,
+                                                   predictedComplete=[],
                                                    normalization=false)
-    # Check if predicted densities are provided
-    if predictedComplete === nothing
+    zGrid = range(zMin, zMax, length = nBins)
+
+    if isempty(predictedComplete)
         predictedComplete = predictDensityKNN(distanceXTestTrainL, zTrain, nNeigh,
                                               bandwidthBinsOpt, zMin, zMax, nBins,
                                               normalization=normalization)
     end
 
     # Stratified prediction
-    zGrid = range(zMin, zMax, length = nBins)
     predictedObserved = [predictedComplete[i, argmin(abs.(zTest[i] .- zGrid))]
                          for i in 1:length(zTest)]
 
@@ -677,6 +677,8 @@ function estimate_combined_stratified_risk_Statio_KNN(predictedComplete,
                                                       zTestU_ordered,
                                                       zMin, zMax, nBins;
                                                       boot=0)
+    zGrid = range(zMin, zMax, length = nBins)
+
     # Risk calculation
     colmeansComplete = mean.(eachcol(predictedComplete .^ 2))
     sSquare = mean(colmeansComplete)
@@ -691,7 +693,10 @@ function estimate_combined_stratified_risk_Statio_KNN(predictedComplete,
                      predictedCompleteBoot = predictedComplete[sampleBoot, :]
                      colmeansCompleteBoot = mean.(eachcol(predictedCompleteBoot .^ 2))
                      sSquareBoot = mean(colmeansCompleteBoot)
-                     predictedObservedBoot = predictedObserved[sampleBoot]
+                     predictedObservedBoot = [
+                         predictedCompleteBoot[i, argmin(
+                             abs.(zTestU_ordered[sampleBoot[i]] .- zGrid))]
+                         for i in 1:length(zTestU_ordered)]
                      likeliBoot = mean(predictedObservedBoot)
                      0.5 * sSquareBoot - likeliBoot
                      end for _ in 1:boot]
@@ -739,8 +744,8 @@ end
 
 
 function estimate_combined_stratified_risk_Statio(predictedComplete, predictedObserved,
-                                                  zTest_ordered, nBins, boot=false,
-                                                  zMin=0, zMax=1)
+                                                  zTest_ordered, zMin, zMax, nBins;
+                                                  boot=0)
 
     zGrid = range(zMin, zMax, length = nBins)
 
@@ -749,7 +754,7 @@ function estimate_combined_stratified_risk_Statio(predictedComplete, predictedOb
     likeli = mean(predictedObserved)
     output = Dict("mean" => 0.5 * sSquare - likeli)
 
-    if boot
+    if boot != 0
         # Bootstrap
         bootMeans = [begin
                      sampleBoot = sample(1:length(zTest_ordered),
@@ -757,13 +762,14 @@ function estimate_combined_stratified_risk_Statio(predictedComplete, predictedOb
                      predictedCompleteBoot = predictedComplete[sampleBoot, :]
                      colmeansCompleteBoot = mean.(eachcol(predictedCompleteBoot .^ 2))
                      sSquareBoot = mean(colmeansCompleteBoot)
-                     predictedObservedBoot = [predictedCompleteBoot[i, argmin(
-                         abs.(zTest_ordered[sampleBoot[i]] .- zGrid))]
-                                              for i in 1:length(zTest_ordered)]
+                     predictedObservedBoot = [
+                         predictedCompleteBoot[i, argmin(
+                             abs.(zTest_ordered[sampleBoot[i]] .- zGrid))]
+                         for i in 1:length(zTest_ordered)]
                      likeliBoot = mean(predictedObservedBoot)
                      0.5 *sSquareBoot - likeliBoot
-                     end for _ in 1:100] # Assuming 100 bootstrap samples
-        output["seBoot"] = sqrt(var(bootMeans))
+                     end for _ in 1:boot]
+        output["seBoot"] = std(bootMeans)
     end
     return output
 end

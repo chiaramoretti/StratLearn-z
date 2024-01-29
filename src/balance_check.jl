@@ -1,4 +1,5 @@
-using HypothesisTests, Statistics
+using HypothesisTests
+using Statistics
 
 """
     smd_fct(data, cov_names, split_indicator="source_ind")
