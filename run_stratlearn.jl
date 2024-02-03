@@ -102,7 +102,7 @@ function main()
         # Load the hyperparameters from a file (adjust the file loading as needed)
         stored_hyperparams_per_strata = load(result_folder_path *
                                              time_stamp_hyperparams_file * "/" *
-                                             hyperparam_file_name * ".rds", convert=true)
+                                             hyperparam_file_name * ".csv", convert=true)
         println("Hyperparameter file: $hyperparam_file_name is loaded!")
     end
 
@@ -222,9 +222,7 @@ p1 = histogram(PS[1:nL], bins=50, normed=true, alpha=0.5,
 p2 = histogram(PS[(nL + 1):(nL + nU)], bins=50, normed=true, alpha=0.5,
                label="Target propensity score", legend=:topright)
 plot(p1, p2, xlim=(0, 1), title="Hist: Estimated propensity scores (source vs. target) resampled data", xlabel="Propensity score")
-
-# Save the plot
-savefig("$(result_folder_path)/PS_distribution$(out_comment)_scaled_seed$(selected_seed)_$(time_stamp).pdf")
+savefig("$(result_folder_path)/PS_distribution_$(out_comment)scaled_seed_$(selected_seed).pdf")
 
 # Check proportions in each strata
 
@@ -249,7 +247,9 @@ push!(group_proportions,
        mean(all_data[all_data.source_ind .== 0, :Z]), "target"))
 
 # Save group proportions to CSV, also export in LaTex format
-CSV.write("$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment)$(time_stamp).csv", group_proportions)
+CSV.write(
+    "$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment)$(time_stamp).csv",
+    group_proportions)
 f = open("$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment)$(time_stamp).tex", "w")
 pretty_table(f, group_proportions, backend=Val(:latex))
 close(f)
@@ -320,8 +320,9 @@ push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
 #                         result_folder = result_folder_path * "/")
 
 # Save results
-serialize(result_folder_path * "/balance_results_" * out_comment * "seed" *
-          string(selected_seed) * "_" * time_stamp * ".jls", [smd_all, ks_all])
+CSV.write(result_folder_path * "/balance_results_" * out_comment *
+          "seed$(selected_seed)_" * time_stamp * ".csv",
+          DataFrame(Dict(:smd => smd_all, :ks => ks_all)))
 
 #-------------------------------------------------------------------------------
 # PS estimation is done. Now compute conditional densities on each stratum
@@ -340,7 +341,7 @@ sta_predictedObserved = []
 sta_ordered_zTestU = Float64[] # only to track testU strata sizes
 sta_ordered_zU = Float64[]
 sta_ordered_uniqueID_photo = Float64[]
-sta_ordered_photo_indices = Float64[]
+sta_ordered_photo_indices = Int64[]
 
 sta_zTestU_size = Float64[]
 sta_zU_size = Float64[]
@@ -507,6 +508,7 @@ for stratum in first_test_group:nr_groups
         push!(sta_validationU_predictedComplete_Adaptive,
               sta_validationU_stratified_predictions_Adaptive["predictedComplete"])
         push!(sta_validationU_ordered_z, sta_zValidationU)
+
         push!(sta_validationU_finallossAdaptive,
               estimateErrorFinalEstimatorStatio(
                   sta_objectStationaryAdaptive_delta,
@@ -587,10 +589,10 @@ print(optimal_hyperparams)
 
 # Save hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
-    new_hyperparams_path_name =
-        joinpath(result_folder_path,
-                 "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).rds")
-    serialize(new_hyperparams_path_name, optimal_hyperparams)
+    CSV.write(
+        result_folder_path *
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+        optimal_hyperparams)
 end
 
 # Calculate combined loss if grid search was performed
@@ -605,7 +607,7 @@ if hyperparam_selection == "grid_search"
               boot=400))
 end
 
-println("Series cond. density estimator done, starting KNN\n")
+println("\nSeries cond. density estimator done, starting KNN\n")
 
 #-------------------------------- KNN ------------------------------------------
 # Initialize variables for storing KNN results
@@ -667,7 +669,7 @@ for stratum in first_test_group:nr_groups
     sta_zU = zU[idx_U_stratum]
 
     ### KNN hyperparameter optimization
-    print("Fit StratLearn KNN (Continuous) (KNN estimator in paper with StratLearn)")
+    print("Fit StratLearn KNN (Continuous) (KNN estimator in paper with StratLearn)\n")
 
     if hyperparam_selection == "grid_search"
         bandwidthsVec = range(0.0000001, 0.002, length=10)
@@ -792,7 +794,7 @@ push!(sta_predictedObserved_KNN, sta_stratified_predictions_KNN["predictedObserv
 
 if hyperparam_selection == "grid_search"
     push!(sta_finallossKNN,
-          estimateErrorFinalEstimatorKNNContinuousStatio(
+          estimateErrorFinalEstimatorKNNContinuousStatio( # !!! check these results
               sta_bestKNNDensity,
               nr_fzxbins,
               sta_bestBandwidthKNN,
@@ -810,17 +812,19 @@ end
 sta_predictedComplete_KNN = vcat(sta_predictedComplete_KNN...)
 sta_predictedObserved_KNN = vcat(sta_predictedObserved_KNN...)
 
+print(optimal_hyperparams)
+
 # Save optimal hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
-    new_hyperparams_path_name =
-        joinpath(result_folder_path,
-                 "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).rds")
-    serialize(new_hyperparams_path_name, optimal_hyperparams)
+    CSV.write(
+        result_folder_path *
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+    optimal_hyperparams)
 end
 
 # Calculate combined loss if grid search was performed
 if hyperparam_selection == "grid_search"
-    push!(sta_finallossAdaptive,
+    push!(sta_finallossKNN,
           estimate_combined_stratified_risk_Statio_KNN(
               sta_predictedComplete_KNN,
               sta_predictedObserved_KNN,
@@ -831,15 +835,9 @@ if hyperparam_selection == "grid_search"
 end
 
 #--------------------------------------------------------------
-# COMB ST
-pdf(paste(result_folder_path,"/", "_strata_results_", out_comment, "_scaled_", "seed", as.character(selected_seed),
-          "_",  "_" ,time_stamp,"alpha_comb.pdf", sep = "" ),
-    width = 13, height = 7) 
-par(mfrow=c(2,3))
+println("\nDoing Comb ST\n")
 
-sta_bestAlpha = DataFrame(fill(NaN, (nr_groups, length(hyperparam_names)),
-                               ["epsilon", "delta", "nXBest_J", "nZbest_I",
-                                "bandwidth", "nearestNeighbors", "alpha"]))
+sta_bestAlpha = []
 sta_predictUTestCombined = []
 sta_comb_loss =  []
 idx_start_tmp = 1
@@ -848,7 +846,7 @@ for stratum in first_test_group:nr_groups
     
     if hyperparam_selection == "grid_search"
         sta_alpha = range(0, 1, length=50)
-        sta_loss=fill(NaN, length(sta_alpha))
+        sta_loss = fill(NaN, length(sta_alpha))
 
         for ii in 1:length(sta_alpha)
             sta_predictUValidationCombined =
@@ -863,60 +861,64 @@ for stratum in first_test_group:nr_groups
                     sta_predictLValidationCombined,
                     sta_predictUValidationCombined,
                     sta_validationL_ordered_z[stratum],
-                    boot=F,
-                    zMin = 0,
-                    zMax = 1,
-                    nBins = nr_fzxbins)["mean"]
+                    nr_fzxbins,
+                    0, 1,
+                    boot=0)["mean"]
         end
 
         scatter(sta_alpha, sta_loss, shape=:octagon, legend=false,
                 title="Stratum $stratum")
-        sta_bestAlpha[stratum, "alpha"] = sta_alpha[argmin(sta_loss)]
-        sta_bestAlpha[stratum] = sta_alpha[which.min(sta_loss)]
+        push!(sta_bestAlpha, sta_alpha[argmin(sta_loss)])
 
         # store best alpha and save later
         optimal_hyperparams[stratum,"alpha"] = sta_alpha[argmin(sta_loss)]
         
     elseif hyperparam_selection == "fixed"
-        sta_bestAlpha[stratum] = stored_hyperparams_per_strata.alpha[stratum]
+        push!(sta_bestAlpha, stored_hyperparams_per_strata.alpha[stratum])
     end
     
-    #######################################################################################
+    #####################################################################################
     ### Final combination of predictions:
 
-    println(idx_start_tmp)
-    sta_U_idx = idx_start_tmp:(idx_start_tmp + sta_zU_size[stratum - first_test_group + 1] - 1)
-    println(sta_U_idx)
+    println("idx_sta_tmp ",idx_start_tmp)
+    sta_U_idx = Int64(idx_start_tmp):Int64(idx_start_tmp + sta_zU_size[stratum - first_test_group + 1] - 1)
+    println("idx_sta_U_idx ",sta_U_idx)
 
-    sta_predictUTestCombined[stratum] =
-        sta_bestAlpha[stratum] *
-        sta_predictedComplete_KNN[sta_U_idx[1]:sta_U_idx[end], :] + 
-        (1 - sta_bestAlpha[stratum]) *
-        sta_predictedComplete[sta_U_idx[1]:sta_U_idx[end], :]
+    push!(sta_predictUTestCombined,
+          sta_bestAlpha[stratum] *
+          sta_predictedComplete_KNN[sta_U_idx, :] .+ 
+          (1 - sta_bestAlpha[stratum]) *
+          sta_predictedComplete[sta_U_idx, :])
     
     if hyperparam_selection == "grid_search"
-        sta_comb_loss[stratum] =
-            comb_test_loss_fct(
-                sta_predictUTestCombined[stratum],
-                sta_ordered_zU[sta_U_idx[1]:sta_U_idx[2]],
-                0,
-                1,
-                nr_fzxbins,
-                boot = 400)
+        push!(sta_comb_loss,
+              comb_test_loss_fct(
+                  sta_predictUTestCombined[stratum],
+                  sta_ordered_zU[sta_U_idx],
+                  0,
+                  1,
+                  nr_fzxbins,
+                  boot = 400))
     end
-    idx_start_tmp = idx_start_tmp + sta_zU_size[stratum - first_test_group +1] 
+    idx_start_tmp = idx_start_tmp + sta_zU_size[stratum - first_test_group + 1] 
 
 end
 
+println("Optimal hyperparams:\n", optimal_hyperparams)
+
+savefig("$(result_folder_path)/strata_results_$(out_comment)_scaled_seed$(selected_seed)_$(time_stamp)_alpha_comb.pdf")
+
+
 if hyperparam_selection == "grid_search"
     predictedComplete = vcat(sta_predictUTestCombined...)
-    sta_comb_loss[nr_groups + 1] = comb_test_loss_fct(
-        predictedComplete,
-        sta_ordered_zU,
-        0,
-        1,
-        nr_fzxbins,
-        boot = 400)
+    push!(sta_comb_loss,
+          comb_test_loss_fct(
+              predictedComplete,
+              sta_ordered_zU,
+              0,
+              1,
+              nr_fzxbins,
+              boot = 400))
 end
 
 # final StratLearn comb predictions, combining the predictions for the five test strata
@@ -926,58 +928,65 @@ sta_ordered_SL_fzx_target = vcat(sta_predictUTestCombined...)
 #--------------------------------------------------------------
 # Save hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
-    new_hyperparams_path_name = joinpath(result_folder_path, "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).rds")
-    # Serialize the `optimal_hyperparams` DataFrame to a file
-    serialize(new_hyperparams_path_name, optimal_hyperparams)
+    CSV.write(
+        result_folder_path *
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+        optimal_hyperparams)
 end
 
 # Store all StratLearn results
-stratlearn_results = (sta_finallossKNN, sta_finallossAdaptive, sta_comb_loss)
-serialize(joinpath(result_folder_path, "Stratified_learning_results_$(out_comment)_$(time_stamp).rds"), stratlearn_results)
+stratlearn_results = DataFrame(Dict("final_loss_KNN" => sta_finallossKNN,
+                                    "final_loss_adaptive" => sta_finallossAdaptive,
+                                    "combined_loss" => sta_comb_loss))
+CSV.write(
+    result_folder_path * "Stratified_learning_results_$(out_comment)_$(time_stamp).csv",
+    stratlearn_results)
 
 # Reorder StratLearn predictions to match the initial order of the photo data
-# Implement `reorder_array_according_rowindices_vector` or use an equivalent Julia function
-uniqueID_photo_reordered = reorder_array_according_rowindices_vector(
-    sta_ordered_uniqueID_photo, sta_ordered_photo_indices)
+uniqueID_photo_reordered = sta_ordered_uniqueID_photo[sta_ordered_photo_indices]
+zU_reordered = sta_ordered_zU[sta_ordered_photo_indices]
 
-zU_reordered = reorder_array_according_rowindices_vector(
-    sta_ordered_zU, sta_ordered_photo_indices)
+# # Check if reordering is correct
+# if !all(uniqueID_photo_reordered .== uniqueID_photo)
+#     error("Reordering of StratLearn predictions (to initial order) not correct!")
+# end
+# if !all(zU_reordered .== zU)
+#     error("Reordering of StratLearn predictions (to initial order) not correct!")
+# end
 
-# Check if reordering is correct
-if !all(uniqueID_photo_reordered .== uniqueID_photo)
-    error("Reordering of StratLearn predictions (to initial order) not correct!")
-end
-if !all(zU_reordered .== zU)
-    error("Reordering of StratLearn predictions (to initial order) not correct!")
-end
+print(typeof(sta_ordered_SL_fzx_target), size(sta_ordered_SL_fzx_target))
 
 # Reorder the StratLearn conditional density predictions
 SL_fzx_target_reordered = reorder_array_according_rowindices_vector(
     sta_ordered_SL_fzx_target, sta_ordered_photo_indices)
 
 # Normalize the StratLearn conditional density predictions
-SL_fzx_target_normalized = SL_fzx_target_reordered / (rescaled_zGrid[end] - rescaled_zGrid[1])
+SL_fzx_target_reordered /= (rescaled_zGrid[end] - rescaled_zGrid[1])
 
-# Store the predictions and additional results
+print(typeof(rescaled_zGrid), length(rescaled_zGrid))
+
+print(typeof(SL_fzx_target_reordered), length(SL_fzx_target_reordered))
+
+
 serialize(
     joinpath(
         result_folder_path,
-        "Conditional-Z_fzx-StratLearn_$(out_comment)_seed$(selected_seed)_$(time_stamp)_all_predictions_.rds"),
-    Dict("zgrid" => rescaled_zGrid, "fzx" => SL_fzx_target_normalized))
+        "Conditional-Z_fzx-StratLearn_$(out_comment)_seed$(selected_seed)_$(time_stamp)_all_predictions_.jls"),
+    Dict("zgrid" => rescaled_zGrid, "fzx" => SL_fzx_target_reordered))
 
 additional_results = Dict("Z_source" => rescaled_zL, "Z_target" => rescaled_zU,
-                          "PS_all" => PS, "groups_all" => all_data_group,
+                          "PS_all" => PS, "groups_all" => all_data[!, :group],
                           "ID_spectro" => uniqueID_spectro, "ID_photo" => uniqueID_photo)
 serialize(joinpath(
     result_folder_path,
-    "Additional_results_and_data_$(out_comment)_seed$(selected_seed)_$(time_stamp).rds"),
+    "Additional_results_and_data_$(out_comment)_seed$(selected_seed)_$(time_stamp).jls"),
           additional_results)
 
 # Exporting results to CSV
-CSV.write(joinpath("data", "intermediate", "histograms.csv"),
-          DataFrame(fzx = SL_fzx_target_normalized), writeheader = false)
-CSV.write(joinpath("data", "intermediate", "grid.csv"),
-          DataFrame(zgrid = rescaled_zGrid), writeheader = false)
+# CSV.write(joinpath("data", "intermediate", "histograms.csv"),
+#           DataFrame(fzx = SL_fzx_target_reordered), writeheader = false)
+# CSV.write(joinpath("data", "intermediate", "grid.csv"),
+#           DataFrame(zgrid = rescaled_zGrid), writeheader = false)
 end
 
 main()

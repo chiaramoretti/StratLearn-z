@@ -237,3 +237,57 @@ function findThreshold(binSize, estimates, confidence)
 
     return newCut
 end
+
+
+function estimateErrorFinalEstimatorGeneric(predictedCompleteLTest,
+                                            predictedCompleteUTest,
+                                            zTestL,
+                                            nBins,
+                                            zMin, zMax;
+                                            weightsZTestL=Float64[],
+                                            boot=0)
+    zGrid = range(zMin, zMax, length=nBins)
+
+    colmeansComplete = mean.(eachcol(predictedCompleteUTest .^ 2))
+    sSquare = mean(colmeansComplete) # sSquare is the first part of formula 9 (integral over unlabeled z)
+
+    nU = size(predictedCompleteUTest, 1)
+    nL = length(zTestL)
+    predictedObserved = [predictedCompleteLTest[xx, argmin(abs.(zTestL[xx] .- zGrid))]
+                         for xx in 1:nL]
+
+    if isempty(weightsZTestL)
+        likeli = mean(predictedObserved)
+        println("Formula 9 (loss) WITHOUT beta weights computed")
+    else
+        println("Formula 9 (loss) WITH beta weights computed")
+        likeli = mean(predictedObserved .* weightsZTestL)
+    end
+
+    output = Dict()
+    output["mean"] = 0.5 * sSquare - likeli
+
+    if boot != 0
+    # Bootstrap
+        meanBoot = [begin
+                    sampleBootL = sample(1:nL, nL, replace=true)
+                    sampleBootU = sample(1:nU, nU, replace=true)
+                    
+                    predictedCompleteBootL = predictedCompleteLTest[sampleBootL, :]
+                    predictedCompleteBootU = predictedCompleteUTest[sampleBootU, :]
+                    zTestBootL = zTestL[sampleBootL]
+                    weightsZTestBootL = isempty(weightsZTestL) ? weightsZTestL : weightsZTestL[sampleBootL]
+
+                    colmeansComplete = mean.(eachcol(predictedCompleteBootU .^ 2))
+                    sSquare = mean(colmeansComplete)
+
+                    predictedObserved_boot = [
+                        predictedCompleteBootL[i, argmin(
+                            abs.(zTestBootL[i] .- zGrid))] for i in 1:nL]
+                    likeli = isempty(weightsZTestBootL) ? mean(predictedObserved_boot) : mean(predictedObserved_boot .* weightsZTestBootL)
+                    0.5 * sSquare - likeli
+                    end for _ in 1:boot]
+    output["seBoot"] = std(meanBoot)
+    end
+    return output
+end
