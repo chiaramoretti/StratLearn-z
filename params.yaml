@@ -1,0 +1,19 @@
+# Strata
+nr_groups: 5
+first_test_group: 1
+
+# Data
+train: "./data/train.csv"
+test: "./data/test.csv"
+nr_covariates: 6
+
+selected_seed: 2
+nr_fzxbins: 201 # careful, this is the nr of boundaries including start and end
+
+z_scaling_type: "min_max_spectro_z" # options: "min_max_z", "min_max_spectro_z", "fixed"
+
+hyperparam_selection: "grid_search"
+
+output_folder: "./summary_results/"
+add_comment: ""
+

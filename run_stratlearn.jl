@@ -1,7 +1,6 @@
 # Import necessary packages
 using CSV
 using DataFrames
-using Dates
 using Random
 
 using Statistics
@@ -18,36 +17,42 @@ using Serialization
 include("./src/balance_check.jl")
 include("./src/conditional_density.jl")
 include("./src/conditional_density_CS.jl")
+include("./src/datareader.jl")
 
 # Set working directory (if needed)
 # cd("./") # Uncomment and set the path if you need to change the working directory
 
-function main()
-    # Delete old results and create new result folder
-    rm("summary_results", recursive=true, force=true) # Remove the directory if it exists
-    mkdir("summary_results")
+function main(paramfile)
+
+    # Load parameters from file
+    nr_groups, first_test_group, nr_covariates, selected_seed, nr_fzxbins, z_scaling_type, hyperparam_selection, hyperparam_file_name, result_folder_path, out_comment = load_param_file(paramfile);
+    Random.seed!(selected_seed)
+
+    # Initialize hyperparams dataframe with NaN
+    hyperparam_names = ["epsilon", "delta", "nXbest_J", "nZbest_I", "bandwidth",
+                        "nearestNeighbors", "alpha"]
+    stored_hyperparams_per_strata = DataFrame([[NaN for _ in 1:nr_groups]
+                                               for _ in hyperparam_names],
+                                              hyperparam_names)
+    if hyperparam_selection == "fixed"
+        # Load the hyperparameters from a file
+        stored_hyperparams_per_strata = load(hyperparam_file_name, convert=true)
+        println("Hyperparameter file: $hyperparam_file_name is loaded!")
+    end
 
     # Load data: first nr_covariates columns are the covariates (r-band + colors),
     # last columns is spectroscopic redshift
-    data_spectro_raw = CSV.read("./data/train.csv", DataFrame)
-    data_photo_raw = CSV.read("./data/test.csv", DataFrame)
-
+    data_spectro_raw, data_photo_raw = load_datasets(paramfile);
+    
     # Script parameters
     nL = size(data_spectro_raw, 1) # nr of source samples used
     nU = size(data_photo_raw, 1) # nr of target samples used
-
-    nr_groups = 5
-    first_test_group = 1
-
-    selected_seed = 2
-    add_comment = ""
 
     # Random sampling (if needed)
     # data_spectro_raw = data_spectro_raw[rand(1:size(data_spectro_raw, 1), nL), :]
     # data_photo_raw = data_photo_raw[rand(1:size(data_photo_raw, 1), nU), :]
 
-    # REPLACE covariate_names with the names of your covariates (colors and r-band)
-    nr_covariates = 6
+    # Replace covariate_names with the names of your covariates (colors and r-band)
     covariate_names = names(data_photo_raw)[2:(nr_covariates + 1)]
 
     # Only keep the covariates and the spectroscopic redshift
@@ -56,58 +61,6 @@ function main()
 
     uniqueID_photo = data_photo_raw[:, 1]
     data_photo = data_photo_raw[:, [covariate_names; "Z"]]
-
-    # Additional file parameters (mostly default used)
-    nr_fzxbins = 201 # careful, this is the nr of boundaries including start and end
-    z_scaling_type = "min_max_spectro_z" # "min_max_z", "min_max_spectro_z", "fixed"
-
-    hyperparam_selection = "grid_search"
-    time_stamp = Dates.format(Dates.now(), "yyyymmdd_HHMMSS_")
-    Random.seed!(selected_seed)
-    out_comment = time_stamp * add_comment
-
-    result_folder_path = "summary_results/"
-
-    # Load beforehand optimized hyperparameters
-    # (this is only needed if hyperparam_selection == "fixed")
-    # "grid_search", "fixed" (when fixed, then the values in eps/delta_per_strata_fixed
-    # are used as hyperparameters)
-    hyperparam_file_name_tmp = ""
-    time_stamp_hyperparams_file = ""
-    hyperparam_file_name = hyperparam_file_name_tmp # Adjust as needed
-
-    # These values used if hyperparam_selection = "fixed".
-    # Define values e.g. via previous hyperparameter optimization on smaller data
-    eps_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    nXBest_J_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    nZBest_I_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    delta_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    bandwidth_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    nearestneighbors_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-    alpha_per_strata_fixed = [NaN, NaN, NaN, NaN, NaN]
-
-    hyperparam_names = ["epsilon", "delta", "nXbest_J", "nZbest_I", "bandwidth",
-                        "nearestNeighbors", "alpha"]
-    stored_hyperparams_per_strata = DataFrame(
-        epsilon = eps_per_strata_fixed,
-        delta = delta_per_strata_fixed,
-        nXbest_J = nXBest_J_per_strata_fixed,
-        nZbest_I = nZBest_I_per_strata_fixed,
-        bandwidth = bandwidth_per_strata_fixed,
-        nearestNeighbors = nearestneighbors_per_strata_fixed,
-        alpha = alpha_per_strata_fixed
-    )
-
-    if hyperparam_selection == "fixed"
-        # Load the hyperparameters from a file (adjust the file loading as needed)
-        stored_hyperparams_per_strata = load(result_folder_path *
-                                             time_stamp_hyperparams_file * "/" *
-                                             hyperparam_file_name * ".csv", convert=true)
-        println("Hyperparameter file: $hyperparam_file_name is loaded!")
-    end
-
-    # Adjust column names if needed
-    # rename!(stored_hyperparams_per_strata, hyperparam_names)
 
     # Obtain train and validation subsets
     nTrainL = round(Int, 0.5 * nL)
@@ -141,8 +94,11 @@ function main()
 
     # Covariates used for computation, selected from full data frame
     # and rescaled to have mean 0 and std 1
-    covariates = combine(transform(
-        data_full, covariate_names .=> (col -> (col .- mean(col)) ./ std(col)) .=> covariate_names), covariate_names)
+    covariates = combine(
+        transform(
+            data_full,
+            covariate_names .=> (col -> (col .- mean(col)) ./ std(col)) .=> covariate_names),
+        covariate_names)
 
     covariatesL = covariates[1:nL, :]
     covariatesU = covariates[(nL+1):end, :]
@@ -153,7 +109,7 @@ rescaled_zU = zU .* (zMax - zMin) .+ zMin;
 rescaled_zL = zL .* (zMax - zMin) .+ zMin;
 
 # Split L Sample
-randomPermL = collect(1:nL) # shuffle(1:nL) !!!!
+randomPermL = shuffle(1:nL) # collect(1:nL) # this I changed to compare to R version
 idx_TrainL = randomPermL[1:nTrainL]
 idx_ValidationL = randomPermL[(nTrainL+1):end]
 covariatesTrainL = Matrix(covariatesL[idx_TrainL, :])
@@ -217,15 +173,14 @@ for k in 1:nr_groups
 end
 
 # Plotting histograms of propensity scores
-p1 = histogram(PS[1:nL], bins=50, normed=true, alpha=0.5,
-               label="Source propensity score")
-p2 = histogram(PS[(nL + 1):(nL + nU)], bins=50, normed=true, alpha=0.5,
-               label="Target propensity score", legend=:topright)
-plot(p1, p2, xlim=(0, 1), title="Hist: Estimated propensity scores (source vs. target) resampled data", xlabel="Propensity score")
-savefig("$(result_folder_path)/PS_distribution_$(out_comment)scaled_seed_$(selected_seed).pdf")
+histogram(PS[1:nL], bins=50, normed=true, alpha=0.5,
+          label="Source",  title="Estimated propensity scores",
+          xlabel="Propensity score", framestyle=:box)
+histogram!(PS[(nL + 1):(nL + nU)], bins=50, normed=true, alpha=0.5,
+          label="Target", legend=:topright)
+savefig("$(result_folder_path)/PS_distribution_scaled_seed_$(selected_seed).pdf")
 
 # Check proportions in each strata
-
 # !!! could be improved by using `grouped_df = groupby(all_data, :group)`?
 group_proportions = DataFrame("group" => Int64[], "# samples" => Int64[],
                               "mean redshift" => Float64[], "subset" => String[])
@@ -248,9 +203,9 @@ push!(group_proportions,
 
 # Save group proportions to CSV, also export in LaTex format
 CSV.write(
-    "$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment)$(time_stamp).csv",
+    "$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment).csv",
     group_proportions)
-f = open("$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment)$(time_stamp).tex", "w")
+f = open("$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment).tex", "w")
 pretty_table(f, group_proportions, backend=Val(:latex))
 close(f)
 ###
@@ -321,7 +276,7 @@ push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
 
 # Save results
 CSV.write(result_folder_path * "/balance_results_" * out_comment *
-          "seed$(selected_seed)_" * time_stamp * ".csv",
+          "seed$(selected_seed)_" * out_comment * ".csv",
           DataFrame(Dict(:smd => smd_all, :ks => ks_all)))
 
 #-------------------------------------------------------------------------------
@@ -591,7 +546,7 @@ print(optimal_hyperparams)
 if hyperparam_selection == "grid_search"
     CSV.write(
         result_folder_path *
-        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
         optimal_hyperparams)
 end
 
@@ -818,7 +773,7 @@ print(optimal_hyperparams)
 if hyperparam_selection == "grid_search"
     CSV.write(
         result_folder_path *
-        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
     optimal_hyperparams)
 end
 
@@ -906,7 +861,7 @@ end
 
 println("Optimal hyperparams:\n", optimal_hyperparams)
 
-savefig("$(result_folder_path)/strata_results_$(out_comment)_scaled_seed$(selected_seed)_$(time_stamp)_alpha_comb.pdf")
+savefig("$(result_folder_path)/strata_results_$(out_comment)_scaled_seed$(selected_seed)_alpha_comb.pdf")
 
 
 if hyperparam_selection == "grid_search"
@@ -930,7 +885,7 @@ sta_ordered_SL_fzx_target = vcat(sta_predictUTestCombined...)
 if hyperparam_selection == "grid_search"
     CSV.write(
         result_folder_path *
-        "optimal_hyperparams_$(out_comment)_seed$(selected_seed)_$(time_stamp).csv",
+        "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
         optimal_hyperparams)
 end
 
@@ -939,7 +894,7 @@ stratlearn_results = DataFrame(Dict("final_loss_KNN" => sta_finallossKNN,
                                     "final_loss_adaptive" => sta_finallossAdaptive,
                                     "combined_loss" => sta_comb_loss))
 CSV.write(
-    result_folder_path * "Stratified_learning_results_$(out_comment)_$(time_stamp).csv",
+    result_folder_path * "Stratified_learning_results_$(out_comment).csv",
     stratlearn_results)
 
 # Reorder StratLearn predictions to match the initial order of the photo data
@@ -971,7 +926,7 @@ print(typeof(SL_fzx_target_reordered), length(SL_fzx_target_reordered))
 serialize(
     joinpath(
         result_folder_path,
-        "Conditional-Z_fzx-StratLearn_$(out_comment)_seed$(selected_seed)_$(time_stamp)_all_predictions_.jls"),
+        "Conditional-Z_fzx-StratLearn_$(out_comment)_seed$(selected_seed)_all_predictions_.jls"),
     Dict("zgrid" => rescaled_zGrid, "fzx" => SL_fzx_target_reordered))
 
 additional_results = Dict("Z_source" => rescaled_zL, "Z_target" => rescaled_zU,
@@ -979,7 +934,7 @@ additional_results = Dict("Z_source" => rescaled_zL, "Z_target" => rescaled_zU,
                           "ID_spectro" => uniqueID_spectro, "ID_photo" => uniqueID_photo)
 serialize(joinpath(
     result_folder_path,
-    "Additional_results_and_data_$(out_comment)_seed$(selected_seed)_$(time_stamp).jls"),
+    "Additional_results_and_data_$(out_comment)_seed$(selected_seed).jls"),
           additional_results)
 
 # Exporting results to CSV
@@ -989,5 +944,5 @@ serialize(joinpath(
 #           DataFrame(zgrid = rescaled_zGrid), writeheader = false)
 end
 
-main()
+main("params.yaml")
 # End of StratLearn code
