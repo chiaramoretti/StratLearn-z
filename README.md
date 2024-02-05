@@ -13,8 +13,8 @@ To run the example, paste in a terminal
     julia run_stratlearn.jl
 ```
 
+The run's specifications are listed in the `params.yaml` file, as well as the paths to the datafiles.
 The code will produce and store results in a folder `summary_results\`
-NOTE that as is the folder is deleted at each iteration. To change this modify the relevant lines in the `run_stratlearn.jl` script.
 
 Most support functions are documented with docstrings, that can be accessed by typing in the Julia REPL
 ```
