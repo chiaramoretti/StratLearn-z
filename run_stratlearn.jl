@@ -18,6 +18,7 @@ include("./src/balance_check.jl")
 include("./src/conditional_density.jl")
 include("./src/conditional_density_CS.jl")
 include("./src/datareader.jl")
+include("./src/plotter.jl")
 
 # Set working directory (if needed)
 # cd("./") # Uncomment and set the path if you need to change the working directory
@@ -28,12 +29,8 @@ function main(paramfile)
     nr_groups, first_test_group, nr_covariates, selected_seed, nr_fzxbins, z_scaling_type, hyperparam_selection, hyperparam_file_name, result_folder_path, out_comment = load_param_file(paramfile);
     Random.seed!(selected_seed)
 
-    # Initialize hyperparams dataframe with NaN
     hyperparam_names = ["epsilon", "delta", "nXbest_J", "nZbest_I", "bandwidth",
                         "nearestNeighbors", "alpha"]
-    stored_hyperparams_per_strata = DataFrame([[NaN for _ in 1:nr_groups]
-                                               for _ in hyperparam_names],
-                                              hyperparam_names)
     if hyperparam_selection == "fixed"
         # Load the hyperparameters from a file
         stored_hyperparams_per_strata = load(hyperparam_file_name, convert=true)
@@ -94,63 +91,58 @@ function main(paramfile)
 
     # Covariates used for computation, selected from full data frame
     # and rescaled to have mean 0 and std 1
-    covariates = combine(
-        transform(
-            data_full,
-            covariate_names .=> (col -> (col .- mean(col)) ./ std(col)) .=> covariate_names),
-        covariate_names)
+    covariates = combine(transform(data_full, covariate_names .=> (col -> (col .- mean(col)) ./ std(col)) .=> covariate_names), covariate_names)
 
     covariatesL = covariates[1:nL, :]
     covariatesU = covariates[(nL+1):end, :]
-zL = z[1:nL]
-zU = z[(nL+1):end]
+    zL = z[1:nL]
+    zU = z[(nL+1):end]
 
-rescaled_zU = zU .* (zMax - zMin) .+ zMin;
-rescaled_zL = zL .* (zMax - zMin) .+ zMin;
+    rescaled_zU = zU .* (zMax - zMin) .+ zMin;
+    rescaled_zL = zL .* (zMax - zMin) .+ zMin;
 
-# Split L Sample
-randomPermL = shuffle(1:nL) # collect(1:nL) # this I changed to compare to R version
-idx_TrainL = randomPermL[1:nTrainL]
-idx_ValidationL = randomPermL[(nTrainL+1):end]
-covariatesTrainL = Matrix(covariatesL[idx_TrainL, :])
-covariatesValidationL = Matrix(covariatesL[idx_ValidationL, :])
-zTrainL = zL[idx_TrainL]
-zValidationL = zL[idx_ValidationL]
+    # Split L Sample
+    randomPermL = collect(1:nL) # shuffle(1:nL) # this I changed to compare to R version
+    idx_TrainL = randomPermL[1:nTrainL]
+    idx_ValidationL = randomPermL[(nTrainL+1):end]
+    covariatesTrainL = Matrix(covariatesL[idx_TrainL, :])
+    covariatesValidationL = Matrix(covariatesL[idx_ValidationL, :])
+    zTrainL = zL[idx_TrainL]
+    zValidationL = zL[idx_ValidationL]
+    
+    # Split U Sample
+    randomPermU = collect(1:nU) # shuffle(1:nU) # see above
+    idx_ValidationU = randomPermU[1:nValidationU]
+    idx_TestU = randomPermU[(nValidationU+1):end]
+    covariatesValidationU = Matrix(covariatesU[idx_ValidationU, :])
+    covariatesTestU = Matrix(covariatesU[idx_TestU, :])
+    zValidationU = zU[idx_ValidationU]
+    zTestU = zU[idx_TestU]
 
-# Split U Sample
-randomPermU = collect(1:nU) #shuffle(1:nU) !!!
-idx_ValidationU = randomPermU[1:nValidationU]
-idx_TestU = randomPermU[(nValidationU+1):end]
-covariatesValidationU = Matrix(covariatesU[idx_ValidationU, :])
-covariatesTestU = Matrix(covariatesU[idx_TestU, :])
-zValidationU = zU[idx_ValidationU]
-zTestU = zU[idx_TestU]
-
-# Distances L
-distanceXTrainL_TrainL = pairwise(Euclidean(),
-                                  covariatesTrainL,
-                                  covariatesTrainL, dims=1)
-distanceXValidationL_TrainL = pairwise(Euclidean(),
-                                       covariatesValidationL,
-                                       covariatesTrainL, dims=1)
-distanceXValidationU_TrainL = pairwise(Euclidean(),
-                                       covariatesValidationU,
-                                       covariatesTrainL, dims=1)
-distanceXValidationL_ValidationL = pairwise(Euclidean(),
-                                            covariatesValidationL,
-                                            covariatesValidationL, dims=1)
-
-# Distances U to L
-distanceXValidationU_TrainL = pairwise(Euclidean(),
-                                       covariatesValidationU,
-                                       covariatesTrainL, dims=1)
+    # Distances L
+    distanceXTrainL_TrainL = pairwise(Euclidean(),
+                                      covariatesTrainL,
+                                      covariatesTrainL, dims=1)
+    distanceXValidationL_TrainL = pairwise(Euclidean(),
+                                           covariatesValidationL,
+                                           covariatesTrainL, dims=1)
+    distanceXValidationU_TrainL = pairwise(Euclidean(),
+                                           covariatesValidationU,
+                                           covariatesTrainL, dims=1)
+    distanceXValidationL_ValidationL = pairwise(Euclidean(),
+                                                covariatesValidationL,
+                                                covariatesValidationL, dims=1)
+    
+    # Distances U to L
+    distanceXValidationU_TrainL = pairwise(Euclidean(),
+                                           covariatesValidationU,
+                                           covariatesTrainL, dims=1)
 distanceXTestU_TrainL = pairwise(Euclidean(),
                                  covariatesTestU,
                                  covariatesTrainL, dims=1)
 
-################################################################################
+#-------------------------------------------------------------------------------
 # Beginning of the StratLearn part
-
 # Estimate the propensity scores
 
 all_data = covariates;
@@ -202,16 +194,13 @@ push!(group_proportions,
        mean(all_data[all_data.source_ind .== 0, :Z]), "target"))
 
 # Save group proportions to CSV, also export in LaTex format
-CSV.write(
-    "$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment).csv",
+CSV.write(result_folder_path * "group_proportions_K_$(nr_groups)$(out_comment).csv",
     group_proportions)
-f = open("$(result_folder_path)/group_proportions_K_$(nr_groups)_$(out_comment).tex", "w")
+f = open(result_folder_path * "group_proportions_K_$(nr_groups)$(out_comment).tex", "w")
 pretty_table(f, group_proportions, backend=Val(:latex))
 close(f)
-###
 
 # Compute the covariate balance within strata
-
 # Compute the standardized mean differences for raw data and within all strata
 smd_raw = balance_ingroups_fct(all_data, covariate_names, 
                                use_group = [true, true, true, true, true],
@@ -263,21 +252,19 @@ push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    measure = "ks-statistics"))
 
 #-------------------------------------------------------------------------------
-# !!! This is not working properly, needs to be fixed 
 # Plot smd
-# plot_balance_evaluation(smd_all, smd_raw,
-#                             balance_measure = "smd", 
-#                             result_folder = result_folder_path * "/")
+plot_balance_evaluation(smd_all, smd_raw,
+                            balance_measure = "smd", 
+                            result_folder = result_folder_path * "/")
 
-# # Plot ks-statistics
-# plot_balance_evaluation(ks_all,ks_raw,
-#                         balance_measure = "ks-statistics",
-#                         result_folder = result_folder_path * "/")
+# Plot ks-statistics
+plot_balance_evaluation(ks_all,ks_raw,
+                        balance_measure = "ks-statistics",
+                        result_folder = result_folder_path * "/")
 
 # Save results
-CSV.write(result_folder_path * "/balance_results_" * out_comment *
-          "seed$(selected_seed)_" * out_comment * ".csv",
-          DataFrame(Dict(:smd => smd_all, :ks => ks_all)))
+CSV.write(result_folder_path * "balance_results_$(out_comment)seed$(selected_seed).csv",
+    DataFrame(Dict(:smd => smd_all, :ks => ks_all)))
 
 #-------------------------------------------------------------------------------
 # PS estimation is done. Now compute conditional densities on each stratum
@@ -311,13 +298,12 @@ sta_validationU_predictedComplete_Adaptive = []
 sta_validationU_ordered_z = []
 
 # Series hyperparameters
-optimal_hyperparams = fill(NaN, (nr_groups, length(hyperparam_names)))
-optimal_hyperparams = DataFrame(optimal_hyperparams,
-                                ["epsilon", "delta", "nXBest_J", "nZbest_I",
-                                 "bandwidth", "nearestNeighbors", "alpha"])
+optimal_hyperparams = DataFrame([[NaN for _ in 1:nr_groups]
+                                               for _ in hyperparam_names],
+                                              hyperparam_names)
 
 for stratum in first_test_group:nr_groups
-    # Compute distance matrices for each stratum
+    # Compute distance matrices
     idx_train_stratum = findall(x -> x in train_strata[stratum],
                                 all_data.group[idx_TrainL]);
     idx_val_stratum = findall(x -> x in val_strata[stratum],
@@ -372,6 +358,7 @@ for stratum in first_test_group:nr_groups
     # each stratum
     print("Fit StratLearn Stationary Adaptive (Series cond. density estimator)\n")
 
+    # Starting hyperparameters optimization
     # Initialize variables
     epsGrid = range(0.05, stop=0.4, length=7);
     myerror = fill(NaN, length(epsGrid));
@@ -380,7 +367,6 @@ for stratum in first_test_group:nr_groups
         for (ii, myeps) in enumerate(epsGrid)
             println(ii / length(epsGrid))
             
-            # Function calls (assuming these functions are defined in the external file)
             object = condDensityStatio(sta_distanceXTrainL_TrainL,
                                        sta_zTrainL,
                                        nZMax=70,
@@ -426,7 +412,7 @@ for stratum in first_test_group:nr_groups
 
         nXBest_J = sta_objectStationaryAdaptive_delta["nXBest"]
         nZBest_I = sta_objectStationaryAdaptive_delta["nZBest"]
-        optimal_hyperparams[stratum, "nXBest_J"] = nXBest_J
+        optimal_hyperparams[stratum, "nXbest_J"] = nXBest_J
         optimal_hyperparams[stratum, "nZbest_I"] = nZBest_I
 
         sta_validationL_stratified_predictions_Adaptive =
@@ -481,7 +467,7 @@ for stratum in first_test_group:nr_groups
         nXBest_J = stored_hyperparams_per_strata.nXbest_J[stratum] 
         nZBest_I = stored_hyperparams_per_strata.nZbest_I[stratum]
     end
-# !!! indentation???
+
 sta_objectStationaryAdaptive = condDensityStatio(sta_distanceXL_L,
                                                  sta_zL,
                                                  nZMax=70,
@@ -511,6 +497,7 @@ sta_stratified_predictions =
                                           zMin = 0,
                                           zMax = 1,
                                           predictedComplete = predict_complete_U)
+
 # concatenate the predictions for the test sets of each stratum,
 # leading to one set of test set preds. in StratLearn order
 push!(sta_predictedComplete, predict_complete_U)
@@ -544,10 +531,9 @@ print(optimal_hyperparams)
 
 # Save hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
-    CSV.write(
-        result_folder_path *
-        "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
-        optimal_hyperparams)
+    CSV.write(result_folder_path *
+              "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
+              optimal_hyperparams)
 end
 
 # Calculate combined loss if grid search was performed
@@ -652,8 +638,8 @@ for stratum in first_test_group:nr_groups
         sta_bestKNNDensity=(nNeighbours)[pointMin[2][2]] # 10
         
         ## store optimal hyperparameters
-        optimal_hyperparams[stratum,"bandwidth"] = sta_bestBandwidthKNN
-        optimal_hyperparams[stratum,"nearestNeighbors"] = sta_bestKNNDensity
+        optimal_hyperparams[stratum, "bandwidth"] = sta_bestBandwidthKNN
+        optimal_hyperparams[stratum, "nearestNeighbors"] = sta_bestKNNDensity
 
         ### Validation set predictions:
         ### labeled validation predictions and loss (on strata)
@@ -749,7 +735,7 @@ push!(sta_predictedObserved_KNN, sta_stratified_predictions_KNN["predictedObserv
 
 if hyperparam_selection == "grid_search"
     push!(sta_finallossKNN,
-          estimateErrorFinalEstimatorKNNContinuousStatio( # !!! check these results
+          estimateErrorFinalEstimatorKNNContinuousStatio(
               sta_bestKNNDensity,
               nr_fzxbins,
               sta_bestBandwidthKNN,
@@ -771,10 +757,9 @@ print(optimal_hyperparams)
 
 # Save optimal hyperparameters if optimized via grid search
 if hyperparam_selection == "grid_search"
-    CSV.write(
-        result_folder_path *
-        "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
-    optimal_hyperparams)
+    CSV.write(result_folder_path *
+              "optimal_hyperparams_$(out_comment)_seed$(selected_seed).csv",
+              optimal_hyperparams)
 end
 
 # Calculate combined loss if grid search was performed
@@ -823,9 +808,10 @@ for stratum in first_test_group:nr_groups
 
         scatter(sta_alpha, sta_loss, shape=:octagon, legend=false,
                 title="Stratum $stratum")
+
         push!(sta_bestAlpha, sta_alpha[argmin(sta_loss)])
 
-        # store best alpha and save later
+        # store best alpha
         optimal_hyperparams[stratum,"alpha"] = sta_alpha[argmin(sta_loss)]
         
     elseif hyperparam_selection == "fixed"
@@ -835,9 +821,7 @@ for stratum in first_test_group:nr_groups
     #####################################################################################
     ### Final combination of predictions:
 
-    println("idx_sta_tmp ",idx_start_tmp)
     sta_U_idx = Int64(idx_start_tmp):Int64(idx_start_tmp + sta_zU_size[stratum - first_test_group + 1] - 1)
-    println("idx_sta_U_idx ",sta_U_idx)
 
     push!(sta_predictUTestCombined,
           sta_bestAlpha[stratum] *
@@ -917,11 +901,6 @@ SL_fzx_target_reordered = reorder_array_according_rowindices_vector(
 
 # Normalize the StratLearn conditional density predictions
 SL_fzx_target_reordered /= (rescaled_zGrid[end] - rescaled_zGrid[1])
-
-print(typeof(rescaled_zGrid), length(rescaled_zGrid))
-
-print(typeof(SL_fzx_target_reordered), length(SL_fzx_target_reordered))
-
 
 serialize(
     joinpath(
