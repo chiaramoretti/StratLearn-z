@@ -3,16 +3,18 @@ nr_groups: 5
 first_test_group: 1
 
 # Data
-train: "./data/train.csv"
-test: "./data/test.csv"
+train: "./data/train_R_v2.csv"
+test: "./data/test_R_v2.csv"
 nr_covariates: 6
+train_fraction: 0.5 # fraction of dataset used for training, must be 0<x<1
 
 selected_seed: 2
-nr_fzxbins: 201 # careful, this is the nr of boundaries including start and end
+nr_fzxbins: 201 # this is the nr of boundaries including start and end
 
 z_scaling_type: "min_max_spectro_z" # options: "min_max_z", "min_max_spectro_z", "fixed"
 
-hyperparam_selection: "grid_search"
+hyperparam_selection: "fixed" # options: "grid_search", "fixed"
+hyperparam_file_name: "summary_results/optimal_hyperparams__seed2.csv"
 
 output_folder: "./summary_results/"
 add_comment: ""

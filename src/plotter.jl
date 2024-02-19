@@ -77,5 +77,5 @@ function plot_balance_evaluation(balance_list_strata, balance_raw;
         annotate!((0.05,0.95),text(legend, 10, :left, :top))
     end
     plot(plotlist..., layout=5, size=(1400, 800), framestyle=:box)
-    savefig(result_folder * "balance_plots_$(balance_measure).pdf")
+    savefig(joinpath(result_folder, "balance_plots_$(balance_measure).pdf"))
 end
