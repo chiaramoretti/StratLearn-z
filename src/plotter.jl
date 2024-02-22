@@ -38,7 +38,7 @@ This function creates scatter plots comparing the balance measure between the ra
 function plot_balance_evaluation(balance_list_strata, balance_raw;
                                  balance_measure = "smd", method_name = "",
                                  add_method_list = [], add_method_name = "",
-                                 result_folder = "")
+                                 result_folder = "", comment="")
 
     max_smd = [maximum([collect(values(balance_raw[1]));
                         collect(values(balance_list_strata[i][1]))])
@@ -77,5 +77,6 @@ function plot_balance_evaluation(balance_list_strata, balance_raw;
         annotate!((0.05,0.95),text(legend, 10, :left, :top))
     end
     plot(plotlist..., layout=5, size=(1400, 800), framestyle=:box)
-    savefig(joinpath(result_folder, "balance_plots_$(balance_measure).pdf"))
+    savefig(joinpath(result_folder,
+                     "balance_plots_$(balance_measure)"*comment*".pdf"))
 end

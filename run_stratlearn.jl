@@ -51,13 +51,13 @@ function main(paramfile)
     # data_photo_raw = data_photo_raw[rand(1:size(data_photo_raw, 1), nU), :]
 
     # Replace covariate_names with the names of your covariates (colors and r-band)
-    covariate_names = names(data_photo_raw)[2:(params_dict["nr_covariates"] + 1)]
+   covariate_names = names(data_photo_raw)[2:(params_dict["nr_covariates"] + 1)]
 
     # Only keep the covariates and the spectroscopic redshift
-    uniqueID_spectro = data_spectro_raw[:, 1]
+    uniqueID_spectro = data_spectro_raw.index
     data_spectro = data_spectro_raw[:, [covariate_names; "Z"]]
 
-    uniqueID_photo = data_photo_raw[:, 1]
+    uniqueID_photo = data_photo_raw.index
     data_photo = data_photo_raw[:, [covariate_names; "Z"]]
 
     # Obtain train and validation subsets
@@ -172,7 +172,8 @@ histogram(PS[1:nL], bins=50, normed=true, alpha=0.5,
 histogram!(PS[(nL + 1):(nL + nU)], bins=50, normed=true, alpha=0.5,
            label="Target", legend=:topright)
 savefig(joinpath(params_dict["output_folder"],
-                 "PS_distribution_scaled_seed_$(params_dict["selected_seed"]).pdf"))
+                 "PS_distribution_scaled_seed_$(params_dict["selected_seed"])"*
+                 params_dict["add_comment"]*".pdf"))
 
 # Check proportions in each strata
 # !!! could be improved by using `grouped_df = groupby(all_data, :group)`?
@@ -262,28 +263,29 @@ push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
 # Plot smd
 plot_balance_evaluation(smd_all, smd_raw,
                         balance_measure = "smd", 
-                        result_folder = params_dict["output_folder"])
+                        result_folder = params_dict["output_folder"],
+                        comment=params_dict["add_comment"])
 
 # Plot ks-statistics
 plot_balance_evaluation(ks_all,ks_raw,
                         balance_measure = "ks-statistics",
-                        result_folder = params_dict["output_folder"])
+                        result_folder = params_dict["output_folder"],
+                        comment=params_dict["add_comment"])
 
 # Save results
 CSV.write(joinpath(params_dict["output_folder"],
-                   "balance_results_"*params_dict["add_comment"]*
-                   "seed$(params_dict["selected_seed"]).csv"),
+                   "balance_results"*params_dict["add_comment"]*
+                   "_seed$(params_dict["selected_seed"]).csv"),
           DataFrame(Dict(:smd => smd_all, :ks => ks_all)))
 
 #-------------------------------------------------------------------------------
 # PS estimation is done. Now compute conditional densities on each stratum
 
 # Initialize lists for train and validation strata
-train_strata = [[1], [2], [3], [4], [5]]
-
 # Note that for now the validation set is always only from the same strata as
 # the test set (not combined)
-val_strata = [[1], [2], [3], [4], [5]]
+train_strata = [[i] for i in params_dict["first_test_group"]:params_dict["nr_groups"]]
+val_strata = [[i] for i in params_dict["first_test_group"]:params_dict["nr_groups"]]
 
 # Initialize variables for storing results
 sta_finallossAdaptive = []
@@ -541,8 +543,8 @@ print(optimal_hyperparams)
 # Save hyperparameters if optimized via grid search
 if params_dict["hyperparam_selection"] == "grid_search"
     CSV.write(joinpath(params_dict["output_folder"],
-                       "optimal_hyperparams_"*params_dict["add_comment"]*"_seed"*
-                       params_dict["selected_seed"]*".csv"),
+                       "optimal_hyperparams"*params_dict["add_comment"]*
+                       "_seed_$(params_dict["selected_seed"]).csv"),
               optimal_hyperparams)
 end
 
@@ -767,8 +769,8 @@ print(optimal_hyperparams)
 # Save optimal hyperparameters if optimized via grid search
 if params_dict["hyperparam_selection"] == "grid_search"
     CSV.write(joinpath(params_dict["output_folder"],
-                       "optimal_hyperparams_"*params_dict["add_comment"]*"_seed"*
-                       params_dict["selected_seed"]*".csv"),
+                       "optimal_hyperparams_"*params_dict["add_comment"]*
+                       "_seed_$(params_dict["selected_seed"]).csv"),
               optimal_hyperparams)
 end
 
@@ -857,7 +859,8 @@ end
 println("Optimal hyperparams:\n", optimal_hyperparams)
 
 savefig(joinpath(params_dict["output_folder"],
-                 "strata_results_"*params_dict["add_comment"]*"_scaled_seed_$(params_dict["selected_seed"])_alpha_comb.pdf"))
+                 "strata_results"*params_dict["add_comment"]*
+                 "_scaled_seed_$(params_dict["selected_seed"])_alpha_comb.pdf"))
         
 if params_dict["hyperparam_selection"] == "grid_search"
     predictedComplete = vcat(sta_predictUTestCombined...)
@@ -889,20 +892,12 @@ stratlearn_results = DataFrame(Dict("final_loss_KNN" => sta_finallossKNN,
                                     "final_loss_adaptive" => sta_finallossAdaptive,
                                     "combined_loss" => sta_comb_loss))
 CSV.write(joinpath(params_dict["output_folder"],
-                   "stratified_learning_results_"*params_dict["add_comment"]*".csv"),
+                   "stratified_learning_results"*params_dict["add_comment"]*".csv"),
           stratlearn_results)
 
 # Reorder StratLearn predictions to match the initial order of the photo data
 uniqueID_photo_reordered = sta_ordered_uniqueID_photo[sta_ordered_photo_indices]
 zU_reordered = sta_ordered_zU[sta_ordered_photo_indices]
-
-# # Check if reordering is correct
-# if !all(uniqueID_photo_reordered .== uniqueID_photo)
-#     error("Reordering of StratLearn predictions (to initial order) not correct!")
-# end
-# if !all(zU_reordered .== zU)
-#     error("Reordering of StratLearn predictions (to initial order) not correct!")
-# end
 
 # Reorder the StratLearn conditional density predictions
 SL_fzx_target_reordered = reorder_array_according_rowindices_vector(
@@ -914,7 +909,7 @@ SL_fzx_target_reordered /= (rescaled_zGrid[end] - rescaled_zGrid[1])
 serialize(
     joinpath(
         params_dict["output_folder"],
-        "conditional-Z_fzx-StratLearn_"*params_dict["add_comment"]*
+        "conditional-Z_fzx-StratLearn"*params_dict["add_comment"]*
         "_seed_$(params_dict["selected_seed"])_all_predictions_.jls"),
     Dict("zgrid" => rescaled_zGrid, "fzx" => SL_fzx_target_reordered))
 
@@ -926,13 +921,7 @@ serialize(joinpath(
     "additional_results_and_data_"*
     params_dict["add_comment"]*"_seed_$(params_dict["selected_seed"]).jls"),
           additional_results)
-
-# Exporting results to CSV
-# CSV.write(joinpath("data", "intermediate", "histograms.csv"),
-#           DataFrame(fzx = SL_fzx_target_reordered), writeheader = false)
-# CSV.write(joinpath("data", "intermediate", "grid.csv"),
-#           DataFrame(zgrid = rescaled_zGrid), writeheader = false)
 end
 
-main("params.yaml")
+main("params_a4b8.yaml")
 # End of StratLearn code
