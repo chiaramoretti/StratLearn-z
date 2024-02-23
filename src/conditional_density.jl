@@ -313,7 +313,6 @@ Estimates the density for each bin interval using the K-nearest neighbors method
 A dictionary containing the estimated means for each bin interval and the bin intervals.
 
 """
-# OK
 function predictDensityStatio(object, distanceXTestTrain; zTestMin=0, zTestMax=1,
                               B=1000, probabilityInterval=false, confidence=0.95,
                               delta=0)
@@ -347,7 +346,6 @@ function predictDensityStatio(object, distanceXTestTrain; zTestMin=0, zTestMax=1
     estimates = [compute_sum(basisX[i, :], basisZ[j, :],
                             object["coefficients"][1:nXBest, 1:nZBest])
                  for i in 1:size(basisX, 1), j in 1:size(basisZ, 1)]
-    # estimates = transpose(estimates)
 
     binSize = (zTestMax - zTestMin) / (B - 1)
     normalizedEstimates = [normalizeDensity(binSize, estimates[i,:], delta)
