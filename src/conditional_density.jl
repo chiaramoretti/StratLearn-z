@@ -19,7 +19,7 @@ A dictionary containing the following keys:
 - `"bestDeltaoneSD"`: The maximum delta value within one standard deviation of the optimal delta.
 """
 function chooseDeltaStatio(object, zValidation, distanceXValidationTrain,
-                           deltaGrid, nBins)
+                           deltaGrid, nBins; boot=100, zMin=0, zMax=1)
     errors = []
     errorSE = []
 
@@ -28,8 +28,9 @@ function chooseDeltaStatio(object, zValidation, distanceXValidationTrain,
                                                            zValidation,
                                                            distanceXValidationTrain,
                                                            nBins,
-                                                           boot=100,
-                                                           zMin=0, zMax=1,
+                                                           boot=boot,
+                                                           zMin=zMin,
+                                                           zMax=zMax,
                                                            delta=delta)
         push!(errors, estimateErrors["mean"])
         push!(errorSE, estimateErrors["seBoot"])
@@ -256,8 +257,7 @@ function estimateErrorEstimatorStatio(object, zTest, distanceXTestTrain)
     eigenVectors = object["eigenX"]
     eigenValues = object["eigenValuesX"]
 
-    basisX = kernelNewOld * eigenVectors
-    basisX = (1 / n) .* basisX * Diagonal(1 ./ eigenValues)
+    basisX = (1 / n) .* (kernelNewOld * eigenVectors) * Diagonal(1 ./ eigenValues)
 
     basisPsiMean = (1 / m) .* transpose(transpose(basisZ) * basisX)
     W = (1 / m) .* (transpose(basisX) * basisX)
@@ -271,15 +271,22 @@ function estimateErrorEstimatorStatio(object, zTest, distanceXTestTrain)
     prodMatrix = [compute_prod_matrix(xx) for xx in 1:nZ]
 
     D = cumsum(hcat(prodMatrix...), dims=2)
-
-    # Step 1: Create the grid
+    tmpcoeff = object["coefficients"][1:nX, 1:nZ]
     mygrid = Iterators.product(1:nX, 1:nZ)
 
-    # Step 2: Apply a function to each element of the grid and reshape the result
+    # errors=Matrix{Float64}(undef, nX, nZ)
+    # for i in 1:nX
+    #     for j in 1:nZ
+    #         sbeta = 0.5*D[i,j]
+    #         slike = sum(tmpcoeff[1:i,1:j] .* basisPsiMean[1:i,1:j])
+    #         errors[i,j] =  sbeta-slike
+    #     end
+    # end
+    
     function compute_error(xx)
-        sBeta = 1/2 * D[xx[1], xx[2]]
+        sBeta = 0.5 * D[xx[1], xx[2]]
         sLikeli = sum(
-            object["coefficients"][1:xx[1],1:xx[2]] .* basisPsiMean[1:xx[1],1:xx[2]])
+            tmpcoeff[1:xx[1],1:xx[2]] .* basisPsiMean[1:xx[1],1:xx[2]])
         return sBeta - sLikeli
     end
     errors = [compute_error(xx) for xx in mygrid]
@@ -340,12 +347,8 @@ function predictDensityStatio(object, distanceXTestTrain; zTestMin=0, zTestMax=1
 
     basisX = (1 / n) .* (kernelNewOld * eigenVectors) * Diagonal(1 ./ eigenValues)
 
-    function compute_sum(yy, xx, coefficients)
-        return sum(yy * xx' .* coefficients)
-    end
-    estimates = [compute_sum(basisX[i, :], basisZ[j, :],
-                            object["coefficients"][1:nXBest, 1:nZBest])
-                 for i in 1:size(basisX, 1), j in 1:size(basisZ, 1)]
+    tmpcoeff = object["coefficients"][1:nXBest, 1:nZBest]
+    estimates = basisX * (basisZ * tmpcoeff')'
 
     binSize = (zTestMax - zTestMin) / (B - 1)
     normalizedEstimates = [normalizeDensity(binSize, estimates[i,:], delta)
