@@ -1,15 +1,30 @@
-using Interpolations, Integrals
+using Interpolations, Integrals, Distributions
 
-function RMSE(zspec, zphot)
-    return sqrt(sum((zspec.-zphot).^2)/length(zspec))
+function RMSE(zspec, zphot; normalised=false)
+    if normalised == true
+        norm_factor=1 .+zspec
+    else
+        norm_factor=1
+    end
+        
+    return sqrt(sum(((zspec.-zphot)./norm_factor).^2)/length(zspec))
 end
 
 function FR15(zspec, zphot)
     return sum((100/length(zspec))*isless.(abs.((zspec.-zphot)./(1 .+zspec)), 0.15))
 end
 
-function bias(zspec, zphot)
-    return sum((zspec.-zphot))/length(zspec)
+function FR05(zspec, zphot)
+    return sum((100/length(zspec))*isless.(abs.((zspec.-zphot)./(1 .+zspec)), 0.05))
+end
+
+function bias(zspec, zphot; normalised=false)
+    if normalised == true
+        norm_factor=1 .+zspec
+    else
+        norm_factor=1
+    end
+    return sum((zspec.-zphot)./norm_factor)/length(zspec)
 end
 
 function find_medians(x, z)
@@ -38,4 +53,8 @@ function PIT(_x, _y, zspec)
     x = x[1:i]
     y = y[1:i]
     return solve(SampledIntegralProblem(y, x), TrapezoidalRule()).u
+end
+
+function PIT_gaussian(mean, sigma, zspec)
+    return cdf(Normal(mean, sigma), zspec)
 end
