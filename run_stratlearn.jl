@@ -41,7 +41,7 @@ function main(paramfile)
     # Load data: first nr_covariates columns are the covariates (r-band + colors),
     # last columns is spectroscopic redshift
     data_spectro_raw, data_photo_raw = load_datasets(paramfile);
-    
+
     # Script parameters
     nL = size(data_spectro_raw, 1) # nr of source samples used
     nU = size(data_photo_raw, 1) # nr of target samples used
@@ -110,7 +110,7 @@ function main(paramfile)
     covariatesValidationL = Matrix(covariatesL[idx_ValidationL, :])
     zTrainL = zL[idx_TrainL]
     zValidationL = zL[idx_ValidationL]
-    
+
     # Split U Sample
     randomPermU = collect(1:nU) # shuffle(1:nU) # see above
     idx_ValidationU = randomPermU[1:nValidationU]
@@ -133,7 +133,7 @@ function main(paramfile)
     distanceXValidationL_ValidationL = pairwise(Euclidean(),
                                                 covariatesValidationL,
                                                 covariatesValidationL, dims=1)
-    
+
     # Distances U to L
     distanceXValidationU_TrainL = pairwise(Euclidean(),
                                            covariatesValidationU,
@@ -210,51 +210,51 @@ close(f)
 
 # Compute the covariate balance within strata
 # Compute the standardized mean differences for raw data and within all strata
-smd_raw = balance_ingroups_fct(all_data, covariate_names, 
+smd_raw = balance_ingroups_fct(all_data, covariate_names,
                                use_group = [true, true, true, true, true],
                                indicator_var = "source_ind", measure = "smd")
 
 smd_all = []
-push!(smd_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(smd_all, balance_ingroups_fct(all_data, covariate_names,
                                     use_group = [true, false, false, false, false],
                                     indicator_var = "source_ind", measure = "smd"))
-push!(smd_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(smd_all, balance_ingroups_fct(all_data, covariate_names,
                                     use_group = [false, true, false, false, false],
                                     indicator_var = "source_ind", measure = "smd"))
-push!(smd_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(smd_all, balance_ingroups_fct(all_data, covariate_names,
                                     use_group = [false, false, true, false, false],
                                     indicator_var = "source_ind", measure = "smd"))
-push!(smd_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(smd_all, balance_ingroups_fct(all_data, covariate_names,
                                     use_group = [false, false, false, true, false],
                                     indicator_var = "source_ind", measure = "smd"))
-push!(smd_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(smd_all, balance_ingroups_fct(all_data, covariate_names,
                                     use_group = [false, false, false, false, true],
                                     indicator_var = "source_ind", measure = "smd"))
 
 # Compute Kolmogorov-Smirnov test statistics for raw data and within all strata
-ks_raw = balance_ingroups_fct(all_data, covariate_names, 
-                              use_group = [true, true, true, true, true], 
+ks_raw = balance_ingroups_fct(all_data, covariate_names,
+                              use_group = [true, true, true, true, true],
                               indicator_var = "source_ind",
                               measure = "ks-statistics")
 
 ks_all = []
-push!(ks_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    use_group = [true, false, false, false, false], 
                                    indicator_var = "source_ind",
                                    measure = "ks-statistics"))
-push!(ks_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    use_group = [false, true, false, false, false], 
                                    indicator_var = "source_ind",
                                    measure = "ks-statistics"))
-push!(ks_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    use_group = [false, false, true, false, false], 
                                    indicator_var = "source_ind",
                                    measure = "ks-statistics"))
-push!(ks_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    use_group = [false, false, false, true, false], 
                                    indicator_var = "source_ind",
                                    measure = "ks-statistics"))
-push!(ks_all, balance_ingroups_fct(all_data, covariate_names, 
+push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
                                    use_group = [false, false, false, false, true], 
                                    indicator_var = "source_ind",
                                    measure = "ks-statistics"))
@@ -262,7 +262,7 @@ push!(ks_all, balance_ingroups_fct(all_data, covariate_names,
 #-------------------------------------------------------------------------------
 # Plot smd
 plot_balance_evaluation(smd_all, smd_raw,
-                        balance_measure = "smd", 
+                        balance_measure = "smd",
                         result_folder = params_dict["output_folder"],
                         comment=params_dict["add_comment"])
 
@@ -323,7 +323,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                                all_data.group[(nL + 1):(nL + nU)][idx_TestU]);
     idx_valU_stratum = findall(x -> x == stratum,
                                all_data.group[(nL + 1):(nL + nU)][idx_ValidationU]);
-    
+
     sta_distanceXTrainL_TrainL = distanceXTrainL_TrainL[idx_train_stratum,
                                                         idx_train_stratum];
     sta_distanceXValidationL_TrainL = pairwise(Euclidean(),
@@ -377,7 +377,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
     if params_dict["hyperparam_selection"] == "grid_search"
         for (ii, myeps) in enumerate(epsGrid)
             println(ii / length(epsGrid))
-            
+
             object = condDensityStatio(sta_distanceXTrainL_TrainL,
                                        sta_zTrainL,
                                        nZMax=70,
@@ -391,11 +391,11 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
             myerror[ii] = object["bestError"]
         end
         myeps = epsGrid[argmin(myerror)]
-        
+
     elseif params_dict["hyperparam_selection"] == "fixed"
         myeps = stored_hyperparams_per_strata.epsilon[stratum]
     end
-    
+
     if params_dict["hyperparam_selection"] == "grid_search"
         sta_objectStationaryAdaptive_delta = condDensityStatio(
             sta_distanceXTrainL_TrainL,
@@ -409,23 +409,23 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
             sta_objectStationaryAdaptive_delta,
             sta_zValidationL,
             sta_distanceXValidationL_TrainL)
-        
+
         sta_bestDeltaStationaryAdaptive = chooseDeltaStatio(
             sta_objectStationaryAdaptive_delta,
             sta_zValidationL,
             sta_distanceXValidationL_TrainL,
             range(0, stop=0.4, step=0.025),
             params_dict["nr_fzxbins"])
-        
+
         delta_best = sta_bestDeltaStationaryAdaptive["bestDelta"]
         optimal_hyperparams[stratum, "delta"] = delta_best
         optimal_hyperparams[stratum, "epsilon"] = myeps
-        
+
         nXBest_J = sta_objectStationaryAdaptive_delta["nXBest"]
         nZBest_I = sta_objectStationaryAdaptive_delta["nZBest"]
         optimal_hyperparams[stratum, "nXbest_J"] = nXBest_J
         optimal_hyperparams[stratum, "nZbest_I"] = nZBest_I
-        
+
         sta_validationL_stratified_predictions_Adaptive =
             estimate_stratifiedpredictions_Statio(sta_objectStationaryAdaptive_delta,
                                                   sta_zValidationL,
@@ -436,7 +436,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
         push!(sta_validationL_predictedComplete_Adaptive,
               sta_validationL_stratified_predictions_Adaptive["predictedComplete"])
         push!(sta_validationL_ordered_z, sta_zValidationL)
-        
+
         push!(sta_validationL_finallossAdaptive,
               estimateErrorFinalEstimatorStatio(
                   sta_objectStationaryAdaptive_delta,
@@ -460,7 +460,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
         push!(sta_validationU_predictedComplete_Adaptive,
               sta_validationU_stratified_predictions_Adaptive["predictedComplete"])
         push!(sta_validationU_ordered_z, sta_zValidationU)
-        
+
         push!(sta_validationU_finallossAdaptive,
               estimateErrorFinalEstimatorStatio(
                   sta_objectStationaryAdaptive_delta,
@@ -498,7 +498,7 @@ predict_complete_U = predictDensityStatio(sta_objectStationaryAdaptive,
                                           delta=delta_best)
 
 ## compute the stratified predictions to merge them together later
-# to get the combined loss 
+# to get the combined loss
 sta_stratified_predictions =
     estimate_stratifiedpredictions_Statio(sta_objectStationaryAdaptive,
                                           sta_zU,
@@ -584,8 +584,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                                all_data.group[(nL + 1):(nL + nU)][idx_TestU])
     idx_valU_stratum = findall(x -> x == stratum,
                                all_data.group[(nL + 1):(nL + nU)][idx_ValidationU])
-    
-    
+
     sta_distanceXTrainL_TrainL = distanceXTrainL_TrainL[idx_train_stratum,
                                                         idx_train_stratum]
     sta_distanceXValidationL_TrainL = pairwise(Euclidean(),
@@ -599,13 +598,13 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                                                covariatesValidationU[idx_valU_stratum,:],
                                                covariatesTrainL[idx_train_stratum, :],
                                                dims=1)
-    
+
     # Subsetting the outcome (redshift) according to strata
     sta_zTrainL = zTrainL[idx_train_stratum]
     sta_zValidationL = zValidationL[idx_val_stratum]
     sta_zTestU = zTestU[idx_test_stratum]
     sta_zValidationU = zValidationU[idx_valU_stratum]
-    
+
     # Final training L and testing sets U
     idx_L_stratum = findall(x -> x in train_strata[stratum], all_data.group[1:nL])
     idx_U_stratum = findall(x -> x == stratum, all_data.group[(nL + 1):(nL + nU)])
@@ -615,19 +614,19 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
     sta_distanceXU_L = pairwise(Euclidean(),
                                 Matrix(covariatesU[idx_U_stratum, :]),
                                 Matrix(covariatesL[idx_L_stratum, :]), dims=1)
-    
+
     # Final training L and testing U redshift
     sta_zL = zL[idx_L_stratum]
     sta_zU = zU[idx_U_stratum]
-    
+
     ### KNN hyperparameter optimization
     print("Fit StratLearn KNN (Continuous) (KNN estimator in paper with StratLearn)\n")
-    
+
     if params_dict["hyperparam_selection"] == "grid_search"
         bandwidthsVec = range(0.0000001, 0.002, length=10)
         nNeighbours = Int.(round.(range(2, 30, length=10)))
         sta_lossKNNBinned = fill(NaN, (length(bandwidthsVec),length(nNeighbours)))
-        
+
         for ii in 1:length(bandwidthsVec)
             println(ii / length(bandwidthsVec))
             for jj in 1:length(nNeighbours)
@@ -643,15 +642,15 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                         sta_zValidationL, boot=false)["mean"]
             end
         end
-        
+
         pointMin = findmin(sta_lossKNNBinned)
         sta_bestBandwidthKNN=(bandwidthsVec)[pointMin[2][1]] # 0.0002223111
         sta_bestKNNDensity=(nNeighbours)[pointMin[2][2]] # 10
-        
+
         ## store optimal hyperparameters
         optimal_hyperparams[stratum, "bandwidth"] = sta_bestBandwidthKNN
         optimal_hyperparams[stratum, "nearestNeighbors"] = sta_bestKNNDensity
-        
+
         ### Validation set predictions:
         ### labeled validation predictions and loss (on strata)
         sta_validationL_stratified_predictions_KNN =
@@ -664,10 +663,10 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                 sta_zTrainL,
                 sta_distanceXValidationL_TrainL,
                 sta_zValidationL, normalization = true)
-        
+
         push!(sta_validationL_predictedComplete_KNN,
               sta_validationL_stratified_predictions_KNN["predictedComplete"])
-        
+
         push!(sta_validationL_finallossKNN,
               estimateErrorFinalEstimatorKNNContinuousStatio(
                   sta_bestKNNDensity,
@@ -682,7 +681,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                   add_pred = false,
                   predictedComplete=sta_validationL_stratified_predictions_KNN["predictedComplete"],
                   predictedObserved=sta_validationL_stratified_predictions_KNN["predictedObserved"]))
-        
+
         # unlabeled validation predictions and loss (on strata)
         sta_validationU_stratified_predictions_KNN =
             estimate_stratifiedpredictions_Statio_KNN(
@@ -695,10 +694,10 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                 sta_distanceXValidationU_TrainL,
                 sta_zValidationU,
                 normalization = true)
-        
+
         push!(sta_validationU_predictedComplete_KNN,
               sta_validationU_stratified_predictions_KNN["predictedComplete"])
-        
+
         push!(sta_validationU_finallossKNN,
               estimateErrorFinalEstimatorKNNContinuousStatio(
                   sta_bestKNNDensity,
@@ -713,7 +712,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                   add_pred = false,
                   predictedComplete=sta_validationU_stratified_predictions_KNN["predictedComplete"],
                   predictedObserved=sta_validationU_stratified_predictions_KNN["predictedObserved"]))
-        
+
     elseif params_dict["hyperparam_selection"] == "fixed"
         sta_bestBandwidthKNN = stored_hyperparams_per_strata.bandwidth[stratum]
         sta_bestKNNDensity = Int64(stored_hyperparams_per_strata.nearestNeighbors[stratum])
@@ -737,7 +736,7 @@ sta_stratified_predictions_KNN = estimate_stratifiedpredictions_Statio_KNN(
     1,
     sta_zL,
     sta_distanceXU_L,
-    sta_zU, 
+    sta_zU,
     predictedComplete = predict_complete_KNN_U)
 
 # concatenate predictions for test sets of each stratum, leading to
@@ -795,11 +794,11 @@ sta_comb_loss =  []
 idx_start_tmp = 1
 
 for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
-    
+
     if params_dict["hyperparam_selection"] == "grid_search"
         sta_alpha = range(0, 1, length=50)
         sta_loss = fill(NaN, length(sta_alpha))
-        
+
         for ii in 1:length(sta_alpha)
             sta_predictUValidationCombined =
                 sta_alpha[ii] * sta_validationU_predictedComplete_KNN[stratum] +
@@ -807,7 +806,7 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
             sta_predictLValidationCombined = sta_alpha[ii] *
                 sta_validationL_predictedComplete_KNN[stratum] + (1-sta_alpha[ii]) *
                 sta_validationL_predictedComplete_Adaptive[stratum]
-            
+
             sta_loss[ii] =
                 estimateErrorFinalEstimatorGeneric(
                     sta_predictLValidationCombined,
@@ -817,31 +816,31 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                     0, 1,
                     boot=0)["mean"]
         end
-        
+
         scatter(sta_alpha, sta_loss, shape=:octagon, legend=false,
                 title="Stratum $stratum")
-        
+
         push!(sta_bestAlpha, sta_alpha[argmin(sta_loss)])
-        
+
         # store best alpha
         optimal_hyperparams[stratum,"alpha"] = sta_alpha[argmin(sta_loss)]
-        
+
     elseif params_dict["hyperparam_selection"] == "fixed"
         push!(sta_bestAlpha, stored_hyperparams_per_strata.alpha[stratum])
     end
-    
-#------------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
 
     # Final combination of predictions:
-    
+
     sta_U_idx = Int64(idx_start_tmp):Int64(idx_start_tmp + sta_zU_size[stratum - params_dict["first_test_group"] + 1] - 1)
-    
+
     push!(sta_predictUTestCombined,
           sta_bestAlpha[stratum] *
-          sta_predictedComplete_KNN[sta_U_idx, :] .+ 
+          sta_predictedComplete_KNN[sta_U_idx, :] .+
           (1 - sta_bestAlpha[stratum]) *
           sta_predictedComplete[sta_U_idx, :])
-    
+
     if params_dict["hyperparam_selection"] == "grid_search"
         push!(sta_comb_loss,
               comb_test_loss_fct(
@@ -852,8 +851,8 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
                   params_dict["nr_fzxbins"],
                   boot = 400))
     end
-    idx_start_tmp = idx_start_tmp + sta_zU_size[stratum - params_dict["first_test_group"] + 1] 
-    
+    idx_start_tmp = idx_start_tmp + sta_zU_size[stratum - params_dict["first_test_group"] + 1]
+
 end
 
 println("Optimal hyperparams:\n", optimal_hyperparams)
@@ -861,7 +860,7 @@ println("Optimal hyperparams:\n", optimal_hyperparams)
 savefig(joinpath(params_dict["output_folder"],
                  "strata_results"*params_dict["add_comment"]*
                  "_scaled_seed_$(params_dict["selected_seed"])_alpha_comb.pdf"))
-        
+
 if params_dict["hyperparam_selection"] == "grid_search"
     predictedComplete = vcat(sta_predictUTestCombined...)
     push!(sta_comb_loss,
@@ -875,7 +874,7 @@ if params_dict["hyperparam_selection"] == "grid_search"
 end
 
 # final StratLearn comb predictions, combining the predictions for the five test strata
-# in one matrix (this is ordered according to StratLearn strata), will be reordered later 
+# in one matrix (this is ordered according to StratLearn strata), will be reordered later
 sta_ordered_SL_fzx_target = vcat(sta_predictUTestCombined...)
 
 #--------------------------------------------------------------
@@ -891,8 +890,9 @@ end
 stratlearn_results = DataFrame(Dict("final_loss_KNN" => sta_finallossKNN,
                                     "final_loss_adaptive" => sta_finallossAdaptive,
                                     "combined_loss" => sta_comb_loss))
-CSV.write(joinpath(params_dict["output_folder"],
-                   "stratified_learning_results"*params_dict["add_comment"]*".csv"),
+
+serialize(joinpath(params_dict["output_folder"],
+                   "stratified_learning_results"*params_dict["add_comment"]*".jls"),
           stratlearn_results)
 
 # Reorder StratLearn predictions to match the initial order of the photo data
@@ -918,10 +918,10 @@ additional_results = Dict("Z_source" => rescaled_zL, "Z_target" => rescaled_zU,
                           "ID_spectro" => uniqueID_spectro, "ID_photo" => uniqueID_photo)
 serialize(joinpath(
     params_dict["output_folder"],
-    "additional_results_and_data_"*
+    "additional_results"*
     params_dict["add_comment"]*"_seed_$(params_dict["selected_seed"]).jls"),
           additional_results)
 end
 
-main("params_a4b8.yaml")
+main("params.yaml")
 # End of StratLearn code
