@@ -6,7 +6,7 @@ function RMSE(zspec, zphot; normalised=false)
     else
         norm_factor=1
     end
-        
+
     return sqrt(sum(((zspec.-zphot)./norm_factor).^2)/length(zspec))
 end
 
@@ -40,7 +40,7 @@ end
 function PIT(_x, _y, zspec)
     x = deepcopy(_x)
     y = deepcopy(_y)
-    itp = linear_interpolation(x, y,extrapolation_bc=Line())
+    itp = linear_interpolation(x, y, extrapolation_bc=Line())
     push!(x, zspec)
     push!(y, itp(zspec))
     i = sortperm(x)
@@ -57,4 +57,29 @@ end
 
 function PIT_gaussian(mean, sigma, zspec)
     return cdf(Normal(mean, sigma), zspec)
+end
+
+function CRPS(_x, _y, zspec)
+    if !(minimum(_x) <= zspec <= maximum(_x))
+        return NaN
+    end
+    a = [PIT(_x, _y, z) for z in _x]
+    itp = linear_interpolation(_x, a)
+
+    f(z, p) = itp(z)^2
+    t1 = solve(IntegralProblem(f, minimum(_x), zspec), HCubatureJL())
+    g(z, p) = (itp(z)-1.)^2
+    t2 = solve(IntegralProblem(g, zspec, maximum(_x)), HCubatureJL())
+
+    return t1.u + t2.u
+end
+
+function CRPS_gaussian(mean, sigma, zspec)
+    f(z, p) = cdf(Normal(p[1],p[2]), z)^2
+    t1 = solve(IntegralProblem(f, -Inf, zspec, [mean, sigma]), HCubatureJL())
+
+    g(z, p) = (cdf(Normal(p[1],p[2]), z) - 1.)^2
+    t2 = solve(IntegralProblem(g, zspec, Inf, [mean, sigma]), HCubatureJL())
+
+    return t1.u + t2.u
 end

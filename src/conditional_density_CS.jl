@@ -162,6 +162,7 @@ function normalizeDensity(binSize, estimates, delta=0)
         estimatesNew = max.(0, estimates .- newXi)
     else
         estimatesNew = vec(estimatesThresh / (binSize * sum(estimatesThresh)))
+        estimatesNew = reshape(estimatesNew, 1, length(estimatesNew))
     end
 
     runs = rle(reshape(estimatesNew,:) .> 0)
@@ -264,7 +265,7 @@ function estimateErrorFinalEstimatorGeneric(predictedCompleteLTest,
         likeli = mean(predictedObserved .* weightsZTestL)
     end
 
-    output = Dict()
+    output = Dict{String, Float64}()
     output["mean"] = 0.5 * sSquare - likeli
 
     if boot != 0

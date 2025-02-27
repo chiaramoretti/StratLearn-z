@@ -19,7 +19,7 @@ include("./src/conditional_density.jl")
 include("./src/conditional_density_CS.jl")
 include("./src/datareader.jl")
 include("./src/plotter.jl")
-
+include("./src/stratify.jl")
 # Set working directory (if needed)
 # cd("./") # Uncomment and set the path if you need to change the working directory
 
@@ -150,20 +150,31 @@ all_data = covariates;
 all_data[!, :Z] = data_full.Z;
 all_data[!, :source_ind] = data_full.train;
 
-# Logistic regression
-formula = term(:source_ind) ~ sum(term.(Tuple(covariate_names)))
-lreg_PS = glm(formula, select(all_data, Not(:Z)), Binomial(), LogitLink())
+#---------------------------
+# # Logistic regression
+# formula = term(:source_ind) ~ sum(term.(Tuple(covariate_names)))
+# lreg_PS = glm(formula, select(all_data, Not(:Z)), Binomial(), LogitLink())
 
-# Extract fitted values (propensity scores)
-PS = predict(lreg_PS)
+# # Extract fitted values (propensity scores)
+# PS = predict(lreg_PS)
 
-# Assign samples to strata
-temp = invperm(sortperm(PS))
-grp_size = length(all_data[:, 1]) / params_dict["nr_groups"]
-all_data[!, "group"] = fill(NaN, length(temp))
-for k in 1:params_dict["nr_groups"]
-    all_data[temp .<= grp_size * (params_dict["nr_groups"] - k + 1), "group"] .= k
-end
+# Part above substituted by this
+PS = compute_PS(:source_ind, covariate_names, all_data)
+#-------------------------
+
+#-------------------------
+# # Assign samples to strata
+# temp = invperm(sortperm(PS))
+# grp_size = length(all_data[:, 1]) / params_dict["nr_groups"]
+# all_data[!, "group"] = fill(NaN, length(temp))
+# for k in 1:params_dict["nr_groups"]
+#     all_data[temp .<= grp_size * (params_dict["nr_groups"] - k + 1), "group"] .= k
+# end
+
+# Part above substituted by this
+stratify!(PS, all_data, params_dict["nr_groups"])
+#-------------------------
+
 
 # Plotting histograms of propensity scores
 histogram(PS[1:nL], bins=50, normed=true, alpha=0.5,
