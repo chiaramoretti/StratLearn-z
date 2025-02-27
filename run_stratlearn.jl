@@ -577,7 +577,6 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
     idx_valU_stratum = findall(x -> x == stratum,
                                all_data.group[(nL + 1):(nL + nU)][idx_ValidationU])
 
-
     sta_distanceXTrainL_TrainL = distanceXTrainL_TrainL[idx_train_stratum,
                                                         idx_train_stratum]
     sta_distanceXValidationL_TrainL = pairwise(Euclidean(),
@@ -823,7 +822,6 @@ for stratum in params_dict["first_test_group"]:params_dict["nr_groups"]
     end
 
 #------------------------------------------------------------------------------------
-
     # Final combination of predictions:
 
     sta_U_idx = Int64(idx_start_tmp):Int64(idx_start_tmp + sta_zU_size[stratum - params_dict["first_test_group"] + 1] - 1)
@@ -883,8 +881,9 @@ end
 stratlearn_results = DataFrame(Dict("final_loss_KNN" => sta_finallossKNN,
                                     "final_loss_adaptive" => sta_finallossAdaptive,
                                     "combined_loss" => sta_comb_loss))
-CSV.write(joinpath(params_dict["output_folder"],
-                   "stratified_learning_results"*params_dict["add_comment"]*".csv"),
+
+serialize(joinpath(params_dict["output_folder"],
+                   "stratified_learning_results"*params_dict["add_comment"]*".jls"),
           stratlearn_results)
 
 # Reorder StratLearn predictions to match the initial order of the photo data
@@ -910,7 +909,7 @@ additional_results = Dict("Z_source" => rescaled_zL, "Z_target" => rescaled_zU,
                           "ID_spectro" => uniqueID_spectro, "ID_photo" => uniqueID_photo)
 serialize(joinpath(
     params_dict["output_folder"],
-    "additional_results_and_data_"*
+    "additional_results"*
     params_dict["add_comment"]*"_seed_$(params_dict["selected_seed"]).jls"),
           additional_results)
 end
