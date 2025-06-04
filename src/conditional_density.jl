@@ -304,20 +304,29 @@ end
 
 
 """
-    predictDensityStatio(object, zTestMin=0, zTestMax=1, B=1000,
-                         distanceXTestTrain, probabilityInterval=false,
+    predictDensityStatio(object, distanceXTestTrain; zTestMin=0, zTestMax=1,
+                         B=1000, probabilityInterval=false,
                          confidence=0.95, delta=0)
 
-Estimates the density for each bin interval using the K-nearest neighbors method.
+Estimate conditional densities at test points using the kernel matrix
+and a basis-function representation.
 
 # Arguments
-- `zTrainNearest`: An array of nearest neighbor values.
-- `nBins`: The number of bins to divide the range of values into.
-- `zMin`: The minimum value of the range.
-- `zMax`: The maximum value of the range.
+- `object`: Trained model containing the kernel, eigen components and
+  coefficients.
+- `distanceXTestTrain`: Matrix of distances between the test and training
+  inputs.
+- `zTestMin`: Minimum value of the evaluation grid.
+- `zTestMax`: Maximum value of the evaluation grid.
+- `B`: Number of grid points used to evaluate the density.
+- `probabilityInterval`: Whether to compute probability intervals.
+- `confidence`: Confidence level for the probability intervals.
+- `delta`: Value used when normalizing densities.
 
 # Returns
-A dictionary containing the estimated means for each bin interval and the bin intervals.
+If `probabilityInterval` is `false`, returns a matrix of normalized density
+estimates. Otherwise returns a dictionary with the normalized estimates and the
+probability interval thresholds.
 
 """
 function predictDensityStatio(object, distanceXTestTrain; zTestMin=0, zTestMax=1,
